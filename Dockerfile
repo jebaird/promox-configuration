@@ -2,11 +2,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install dependencies
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
+# Install system dependencies for config disk creation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    mtools \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy source code
+# Copy all source files first
 COPY . .
 
 # Install the package

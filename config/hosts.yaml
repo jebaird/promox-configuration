@@ -1,0 +1,53 @@
+# Static Hosts and DNS Configuration
+# ===================================
+# Define static DNS entries and DHCP reservations for your network.
+# This file is loaded by the wizard and merged with interactive inputs.
+
+# Local domain for your network
+domain: lab.jebaird.com
+
+# Static hosts - always resolvable via DNS
+# If MAC is provided, a DHCP reservation is also created
+hosts:
+  # Proxmox hypervisor
+  proxmox:
+    ip: 10.0.0.3
+    description: "Proxmox VE hypervisor"
+  
+  # NAS with DHCP reservation
+  # nas:
+  #   ip: 10.0.0.10
+  #   mac: "aa:bb:cc:dd:ee:ff"
+  #   description: "TrueNAS storage server"
+  
+  # Printer with static IP
+  # printer:
+  #   ip: 10.0.0.20
+  #   mac: "11:22:33:44:55:66"
+  #   description: "Network printer"
+
+# DHCP reservations only (no static DNS entry needed)
+# Use this for devices that send their own hostname
+reservations: []
+  # - hostname: gaming-pc
+  #   mac: "de:ad:be:ef:00:01"
+  #   ip: 10.0.0.100
+  #   description: "Gaming PC"
+
+# Split DNS - resolve external domains to internal IPs
+# Use this for services accessible both internally and externally
+domain_overrides: []
+  # - domain: plex.jebaird.com
+  #   ip: 10.0.0.10
+  #   description: "Plex Media Server"
+  
+  # - domain: homeassistant.jebaird.com
+  #   ip: 10.0.0.30
+  #   description: "Home Assistant"
+
+# Upstream DNS servers
+# Options: cloudflare, google, quad9, opendns, or custom IPs
+upstream_dns: cloudflare
+
+# Enable DNS-over-TLS for upstream queries (requires compatible upstream)
+dns_over_tls: false

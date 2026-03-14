@@ -54,8 +54,29 @@ def load_vm_config(vm_name: str) -> dict[str, Any]:
 
 
 def load_proxmox_config() -> dict[str, Any]:
-    """Load the main Proxmox connection configuration."""
-    return load_yaml("proxmox")
+    """Load the main Proxmox connection configuration.
+    
+    Environment variables override YAML config:
+    - PROXMOX_HOST: Proxmox server IP/hostname
+    - PROXMOX_PORT: API port (default: 8006)
+    - PROXMOX_NODE: Node name (default: pve)
+    """
+    # Load .env file if it exists
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+    
+    config = load_yaml("proxmox")
+    
+    # Override with environment variables if set
+    if host := os.getenv("PROXMOX_HOST"):
+        config["host"] = host
+    if port := os.getenv("PROXMOX_PORT"):
+        config["port"] = int(port)
+    if node := os.getenv("PROXMOX_NODE"):
+        config["node"] = node
+    
+    return config
 
 
 def load_network_config() -> dict[str, Any]:

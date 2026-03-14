@@ -1,5 +1,6 @@
 """CLI entry point for Proxmox configuration tool."""
 
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -325,6 +326,71 @@ def deploy(
         console.print(f"  2. Start the VM and complete pfSense installation")
         console.print(f"  3. Configure WAN/LAN interfaces in pfSense")
         console.print(f"  4. Access pfSense web UI at the LAN IP (default: admin/pfsense)")
+
+
+# ---------------------------------------------------------------------------
+# Interactive Wizard
+# ---------------------------------------------------------------------------
+
+@app.command("wizard")
+def wizard(
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be done"),
+):
+    """
+    Interactive wizard for pfSense deployment.
+    
+    Guides you through:
+    - Network discovery and bridge setup
+    - pfSense network configuration (LAN IP, DHCP)
+    - DNS/DHCP settings (domain, hostname registration)
+    - Static hosts and reservations (from hosts.yaml)
+    - VM resource allocation
+    - Automated deployment
+    """
+    from .wizard import DeploymentWizard
+    from .deploy import PfSenseDeployer, print_deployment_result
+    
+    # Test connection first
+    try:
+        client = ProxmoxClient()
+        client.test_connection()
+    except Exception as e:
+        console.print(f"[red]✗[/red] Connection failed: {e}")
+        console.print("\nMake sure your .env file has valid Proxmox credentials.")
+        raise typer.Exit(1)
+    
+    # Look for hosts.yaml config
+    hosts_path = Path("config/hosts.yaml")
+    if hosts_path.exists():
+        console.print(f"[dim]Loading hosts from {hosts_path}...[/dim]\n")
+    else:
+        hosts_path = None
+    
+    # Run the wizard
+    wiz = DeploymentWizard(client, hosts_path=hosts_path)
+    config = wiz.run()
+    
+    if config is None:
+        console.print("[dim]Wizard cancelled[/dim]")
+        raise typer.Exit(0)
+    
+    # Deploy
+    deployer = PfSenseDeployer(client)
+    result = deployer.deploy(config, dry_run=dry_run)
+    
+    # Show result
+    print_deployment_result(result, config)
+    
+    if not result.success:
+        raise typer.Exit(1)
+
+
+@app.command("topology")
+def topology():
+    """Show network topology (bridges and interfaces)."""
+    client = ProxmoxClient()
+    manager = NetworkManager(client)
+    manager.print_topology_table()
 
 
 def main():

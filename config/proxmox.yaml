@@ -1,5 +1,7 @@
 # Proxmox VE Connection Configuration
 # =====================================
+# Note: These can be overridden by environment variables:
+#   PROXMOX_HOST, PROXMOX_PORT, PROXMOX_NODE
 
 # Proxmox host settings
 host: "10.0.0.3"

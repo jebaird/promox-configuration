@@ -193,3 +193,148 @@ class NetworkManager:
                 missing.append(bridge)
         
         return missing
+
+    # -------------------------------------------------------------------------
+    # Discovery methods for interactive wizard
+    # -------------------------------------------------------------------------
+    
+    def get_network_topology(self) -> dict[str, Any]:
+        """Get complete network topology for wizard display.
+        
+        Returns:
+            Dict with 'bridges', 'physical', 'wan_bridge', 'available_for_lan'
+        """
+        interfaces = self.list_interfaces()
+        bridges = []
+        physical = []
+        bridged_ports = set()
+        
+        # First pass: collect bridges and their ports
+        for iface in interfaces:
+            if iface.get("type") == "bridge":
+                bridge_info = {
+                    "name": iface.get("iface", ""),
+                    "ports": iface.get("bridge_ports", ""),
+                    "address": iface.get("cidr", iface.get("address", "")),
+                    "gateway": iface.get("gateway", ""),
+                    "active": iface.get("active", False),
+                    "comments": iface.get("comments", ""),
+                }
+                bridges.append(bridge_info)
+                # Track which physical interfaces are already bridged
+                if bridge_info["ports"]:
+                    for port in bridge_info["ports"].split():
+                        bridged_ports.add(port)
+        
+        # Second pass: collect physical interfaces
+        for iface in interfaces:
+            iface_name = iface.get("iface", "")
+            iface_type = iface.get("type", "")
+            
+            # Identify physical interfaces
+            is_physical = iface_type == "eth" or (
+                iface_type == "" and 
+                any(iface_name.startswith(p) for p in ["eth", "enp", "eno", "ens"])
+            )
+            
+            if is_physical:
+                physical.append({
+                    "name": iface_name,
+                    "active": iface.get("active", False),
+                    "address": iface.get("cidr", iface.get("address", "")),
+                    "in_bridge": iface_name in bridged_ports,
+                })
+        
+        # Identify WAN bridge (has gateway)
+        wan_bridge = None
+        for bridge in bridges:
+            if bridge.get("gateway"):
+                wan_bridge = bridge["name"]
+                break
+        
+        # If no gateway found, assume vmbr0 is WAN
+        if not wan_bridge:
+            for bridge in bridges:
+                if bridge["name"] == "vmbr0":
+                    wan_bridge = "vmbr0"
+                    break
+        
+        # Find physical interfaces available for LAN bridge
+        available_for_lan = [p for p in physical if not p["in_bridge"]]
+        
+        return {
+            "bridges": bridges,
+            "physical": physical,
+            "wan_bridge": wan_bridge,
+            "available_for_lan": available_for_lan,
+        }
+    
+    def suggest_wan_bridge(self) -> str | None:
+        """Find the bridge that appears to be the WAN interface.
+        
+        Returns:
+            Bridge name (e.g., 'vmbr0') or None if not found
+        """
+        topology = self.get_network_topology()
+        return topology.get("wan_bridge")
+    
+    def suggest_lan_candidates(self) -> list[dict]:
+        """Find physical interfaces that could be used for a LAN bridge.
+        
+        Returns:
+            List of available physical interface info dicts
+        """
+        topology = self.get_network_topology()
+        return topology.get("available_for_lan", [])
+    
+    def get_bridge_info(self, name: str) -> dict | None:
+        """Get detailed info about a specific bridge.
+        
+        Args:
+            name: Bridge name
+            
+        Returns:
+            Bridge info dict or None if not found
+        """
+        topology = self.get_network_topology()
+        for bridge in topology.get("bridges", []):
+            if bridge["name"] == name:
+                return bridge
+        return None
+    
+    def print_topology_table(self) -> None:
+        """Print network topology in a wizard-friendly format."""
+        topology = self.get_network_topology()
+        
+        # Bridges table
+        table = Table(title="Network Bridges")
+        table.add_column("Bridge", style="cyan")
+        table.add_column("Ports", style="blue")
+        table.add_column("IP Address", style="yellow")
+        table.add_column("Role", style="green")
+        
+        wan_bridge = topology.get("wan_bridge")
+        
+        for bridge in topology.get("bridges", []):
+            role = ""
+            if bridge["name"] == wan_bridge:
+                role = "✓ WAN (has gateway)" if bridge.get("gateway") else "✓ WAN (assumed)"
+            
+            table.add_row(
+                bridge["name"],
+                bridge["ports"] or "-",
+                bridge["address"] or "-",
+                role,
+            )
+        
+        console.print(table)
+        
+        # Available interfaces for LAN
+        available = topology.get("available_for_lan", [])
+        if available:
+            console.print("\n[bold]Available physical interfaces for LAN bridge:[/bold]")
+            for iface in available:
+                status = "[green]active[/green]" if iface["active"] else "[dim]inactive[/dim]"
+                console.print(f"  • {iface['name']} ({status})")
+        else:
+            console.print("\n[yellow]No unused physical interfaces available for LAN bridge[/yellow]")
