@@ -14,11 +14,11 @@ A Python CLI tool for configuring Proxmox VE via REST API. Designed for home lab
 
 ### Prerequisites
 
-- Python 3.10+
+- Docker & Docker Compose (recommended), OR Python 3.10+
 - Proxmox VE 7.x or 8.x
 - Proxmox API token with appropriate permissions
 
-### Installation
+### Installation (Local Python)
 
 ```bash
 # Clone the repository
@@ -31,6 +31,24 @@ venv\Scripts\activate  # Windows
 
 # Install dependencies
 pip install -e .
+```
+
+### Docker (Recommended)
+
+```bash
+# Configure credentials
+copy .env.example .env
+# Edit .env with your token details
+
+# Run commands using wrapper script (auto-builds image)
+.\proxmox-config.ps1 test
+.\proxmox-config.ps1 deploy pfsense --dry-run
+.\proxmox-config.ps1 network list
+.\proxmox-config.ps1 vm list
+
+# Or run directly with docker compose
+docker compose build
+docker compose run --rm proxmox-config test
 ```
 
 ### Configuration
@@ -49,6 +67,8 @@ pip install -e .
 3. **Verify connection**:
    ```bash
    proxmox-config test
+   # Or with Docker:
+   docker compose run --rm proxmox-config test
    ```
 
 ## Usage
@@ -202,6 +222,9 @@ promox-configuration/
 │   └── main.py           # CLI entry point
 ├── .env.example          # Credentials template
 ├── .gitignore
+├── docker-compose.yaml   # Docker Compose config
+├── Dockerfile            # Container image
+├── proxmox-config.ps1    # PowerShell wrapper script
 ├── pyproject.toml        # Dependencies
 └── README.md
 ```

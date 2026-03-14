@@ -1,0 +1,21 @@
+services:
+  proxmox-config:
+    build: .
+    image: proxmox-config:latest
+    env_file:
+      - .env
+    volumes:
+      # Mount config files (read-only)
+      - ./config:/app/config:ro
+      # Mount .env for credentials (if not using env_file)
+      # - ./.env:/app/.env:ro
+    # Override entrypoint for interactive shell
+    # entrypoint: /bin/bash
+    # stdin_open: true
+    # tty: true
+
+    # Example commands (uncomment one or run with docker compose run):
+    # command: ["test"]
+    # command: ["deploy", "pfsense", "--dry-run"]
+    # command: ["network", "list"]
+    # command: ["vm", "list"]
