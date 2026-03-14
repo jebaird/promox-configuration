@@ -1,0 +1,19 @@
+# Proxmox VE Connection Configuration
+# =====================================
+
+# Proxmox host settings
+host: "10.0.0.3"
+port: 8006
+
+# Node name (usually 'pve' for single-node, or your configured node name)
+# Run 'hostname' on Proxmox to verify
+node: "pve"
+
+# SSL verification
+# Set to false for self-signed certificates (common in home labs)
+# Set to path for custom CA certificate
+verify_ssl: false
+
+# Timeouts (seconds)
+connection_timeout: 30
+read_timeout: 300  # Longer timeout for uploads/downloads

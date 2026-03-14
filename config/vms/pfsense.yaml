@@ -1,0 +1,77 @@
+# pfSense Router VM Configuration
+# ================================
+
+vm:
+  # VM identifier (100-999999)
+  vmid: 100
+  name: "pfsense"
+  description: "pfSense router - WAN/LAN gateway"
+  
+  # Boot settings
+  bios: "seabios"  # Use 'ovmf' for UEFI
+  boot_order: "cdn"  # cd-rom, disk, network
+  onboot: true  # Start on Proxmox boot
+  
+  # Resource allocation
+  resources:
+    cores: 2
+    sockets: 1
+    memory: 4096  # MB
+    balloon: 0  # Disable memory ballooning for router stability
+  
+  # CPU settings
+  cpu:
+    type: "host"  # Use host CPU features for best performance
+    
+# Storage configuration
+storage:
+  # Main disk
+  disk:
+    storage: "local-lvm"
+    size: "32G"
+    format: "raw"  # raw for LVM, qcow2 for directory storage
+    cache: "writeback"
+    discard: true  # Enable TRIM/discard
+    ssd: true  # Optimize for SSD
+    interface: "virtio0"  # VirtIO for best performance
+
+# Network interfaces
+network:
+  # WAN interface - internet uplink
+  - interface: "net0"
+    bridge: "vmbr0"
+    model: "virtio"
+    firewall: false
+    tag: null  # No VLAN tag
+    comment: "WAN"
+  
+  # LAN interface - internal network
+  - interface: "net1"
+    bridge: "vmbr1"
+    model: "virtio"
+    firewall: false
+    tag: null
+    comment: "LAN"
+
+# ISO configuration for installation
+iso:
+  # pfSense CE download settings
+  version: "2.7.2"
+  architecture: "amd64"
+  # ISO will be downloaded from official Netgate mirror
+  # Stored in Proxmox 'local' storage under /var/lib/vz/template/iso/
+  storage: "local"
+  # Filename pattern (auto-generated based on version)
+  # filename: "pfSense-CE-2.7.2-RELEASE-amd64.iso"
+
+# Post-creation notes (informational)
+# These steps must be done manually via Proxmox console:
+# 1. Start VM and access console
+# 2. Accept copyright notice
+# 3. Choose "Install pfSense"
+# 4. Select keymap
+# 5. Use Auto (ZFS) or Auto (UFS) partitioning
+# 6. Wait for installation to complete
+# 7. Remove ISO and reboot
+# 8. Configure WAN/LAN interfaces when prompted
+# 9. Access web GUI at https://<LAN_IP> (default: admin/pfsense)

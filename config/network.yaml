@@ -1,0 +1,25 @@
+# Network Bridge Configuration
+# ============================
+# Defines network bridges for VM connectivity
+
+bridges:
+  # WAN bridge - typically already exists on Proxmox
+  # Connected to your internet uplink
+  wan:
+    name: "vmbr0"
+    exists: true  # Assume default bridge exists
+    comment: "WAN - Internet uplink"
+  
+  # LAN bridge - internal network for home lab VMs
+  # Will be created if it doesn't exist
+  lan:
+    name: "vmbr1"
+    exists: false  # Tool should create this
+    comment: "LAN - Internal network"
+    # Physical interface to bind to this bridge
+    # Run 'ip link' on Proxmox to see available interfaces
+    # Common names: enp1s0, enp2s0, eth0, eth1, ens18, etc.
+    # Leave empty for bridge without physical port (VM-only network)
+    physical_interface: ""
+    # IP configuration for bridge interface (optional)
+    # address: "10.0.0.1/24"  # Uncomment if Proxmox host needs an IP on this network
