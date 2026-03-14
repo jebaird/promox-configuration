@@ -14,8 +14,7 @@ A Python CLI tool for configuring Proxmox VE via REST API. Designed for home lab
 
 ### Prerequisites
 
-- Docker & Docker Compose (recommended), OR Python 3.10+
-- Proxmox VE 7.x or 8.x
+- Docker & Docker Compose (recommended) Proxmox VE 9.x
 - Proxmox API token with appropriate permissions
 
 ### Installation (Local Python)
@@ -64,7 +63,33 @@ docker compose run --rm proxmox-config test
    # Edit .env with your token details
    ```
 
-3. **Verify connection**:
+3. **Optional: Configure network defaults**:
+   
+   Add to `.env` to customize pfSense defaults:
+   ```bash
+   # Local domain name (default: local)
+   PFSENSE_DOMAIN=lab.example.com
+   
+   # LAN subnet prefix (default: 10.0.0)
+   PFSENSE_LAN_SUBNET=192.168.1
+   ```
+   
+   These set wizard defaults for:
+   - Domain: `hostname.lab.example.com`
+   - LAN IP: `192.168.1.1`
+   - DHCP range: `192.168.1.100 - 192.168.1.254`
+
+4. **Optional: Configure Cloudflare for SSL certs**:
+   
+   For automated SSL certificates via `deploy-cert-manager`:
+   ```bash
+   # Create API token at: https://dash.cloudflare.com/profile/api-tokens
+   # Token needs: Zone:DNS:Edit permission
+   CLOUDFLARE_API_TOKEN=your-token-here
+   CLOUDFLARE_ZONE=example.com
+   ```
+
+5. **Verify connection**:
    ```bash
    proxmox-config test
    # Or with Docker:
@@ -90,6 +115,32 @@ This will:
 2. Create LAN bridge (vmbr1) if needed
 3. Download pfSense ISO
 4. Create VM with configured resources
+
+### Deploy Cert-Manager (SSL Certificates)
+
+Automated SSL certificate management using Let's Encrypt and Cloudflare DNS:
+
+```bash
+# Configure Cloudflare credentials in .env:
+# CLOUDFLARE_API_TOKEN=your-api-token
+# CLOUDFLARE_ZONE=example.com
+
+# Deploy cert-manager LXC container
+proxmox-config deploy-cert-manager --dry-run
+proxmox-config deploy-cert-manager
+
+# Use staging environment for testing
+proxmox-config deploy-cert-manager --staging
+```
+
+This creates an LXC container that:
+1. Requests wildcard certificates (`*.lab.example.com`)
+2. Auto-renews before expiry (checks every 12 hours)
+3. Can distribute certs to pfSense, Proxmox, and other services
+
+**Prerequisites:**
+- Cloudflare API token with Zone:DNS:Edit permission
+- `PFSENSE_DOMAIN` set in `.env`
 
 ### Individual Commands
 

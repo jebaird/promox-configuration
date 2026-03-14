@@ -4,7 +4,9 @@
 # This file is loaded by the wizard and merged with interactive inputs.
 
 # Local domain for your network
-domain: lab.jebaird.com
+# Override with PFSENSE_DOMAIN env var, or set explicitly here
+# Examples: local, home.lan, lab.example.com
+domain: local
 
 # Static hosts - always resolvable via DNS
 # If MAC is provided, a DHCP reservation is also created
@@ -37,11 +39,11 @@ reservations: []
 # Split DNS - resolve external domains to internal IPs
 # Use this for services accessible both internally and externally
 domain_overrides: []
-  # - domain: plex.jebaird.com
+  # - domain: plex.example.com
   #   ip: 10.0.0.10
   #   description: "Plex Media Server"
   
-  # - domain: homeassistant.jebaird.com
+  # - domain: homeassistant.example.com
   #   ip: 10.0.0.30
   #   description: "Home Assistant"
 

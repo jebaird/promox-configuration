@@ -1,0 +1,63 @@
+# Certificate Distribution Targets
+# ================================
+# Define where SSL certificates should be distributed after issuance/renewal.
+# The cert-manager container will SCP certificates to these hosts.
+
+# Domain for certificates (can be overridden by PFSENSE_DOMAIN env var)
+# domain: lab.example.com
+
+# Distribution targets
+# Each target needs SSH access from cert-manager container
+targets:
+  # pfSense Router
+  pfsense:
+    enabled: true
+    host: "10.0.0.1"
+    user: "root"
+    # Certificate paths on pfSense
+    cert_path: "/etc/ssl/cert.pem"
+    key_path: "/etc/ssl/key.pem"
+    fullchain_path: "/etc/ssl/fullchain.pem"
+    # Command to reload service after cert update
+    reload_cmd: "/etc/rc.restart_webgui"
+    # Alternative using pfSsh.php:
+    # reload_cmd: "pfSsh.php playback svc restart webgui"
+    
+  # Proxmox VE Host
+  proxmox:
+    enabled: true
+    host: "10.0.0.3"
+    user: "root"
+    # Proxmox expects specific cert/key paths
+    cert_path: "/etc/pve/local/pveproxy-ssl.pem"
+    key_path: "/etc/pve/local/pveproxy-ssl.key"
+    # Restart pveproxy to apply new cert
+    reload_cmd: "systemctl restart pveproxy"
+    
+  # Example: TrueNAS
+  # truenas:
+  #   enabled: false
+  #   host: "10.0.0.10"
+  #   user: "root"
+  #   cert_path: "/etc/certificates/cert.crt"
+  #   key_path: "/etc/certificates/cert.key"
+  #   reload_cmd: "midclt call system.general.ui_restart"
+  
+  # Example: Home Assistant
+  # homeassistant:
+  #   enabled: false
+  #   host: "10.0.0.30"
+  #   user: "root"
+  #   cert_path: "/ssl/fullchain.pem"
+  #   key_path: "/ssl/privkey.pem"
+  #   reload_cmd: "ha core restart"
+
+  # Example: Generic Nginx server
+  # nginx:
+  #   enabled: false
+  #   host: "10.0.0.50"
+  #   user: "root"
+  #   cert_path: "/etc/nginx/ssl/cert.pem"
+  #   key_path: "/etc/nginx/ssl/key.pem"
+  #   fullchain_path: "/etc/nginx/ssl/fullchain.pem"
+  #   reload_cmd: "systemctl reload nginx"

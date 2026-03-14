@@ -385,6 +385,99 @@ def wizard(
         raise typer.Exit(1)
 
 
+# ---------------------------------------------------------------------------
+# Cert-Manager Deployment
+# ---------------------------------------------------------------------------
+
+@app.command("deploy-cert-manager")
+def deploy_cert_manager(
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be done"),
+    staging: bool = typer.Option(False, "--staging", help="Use Let's Encrypt staging environment"),
+):
+    """
+    Deploy cert-manager LXC container for automated SSL certificates.
+    
+    Creates a Debian LXC container that:
+    - Requests wildcard certificates from Let's Encrypt
+    - Uses Cloudflare DNS challenge (requires API token)
+    - Auto-renews certificates before expiry
+    - Can distribute certs to pfSense, Proxmox, and other services
+    
+    Requirements:
+    - CLOUDFLARE_API_TOKEN in .env (with Zone:DNS:Edit permission)
+    - CLOUDFLARE_ZONE in .env (e.g., example.com)
+    - PFSENSE_DOMAIN in .env (e.g., lab.example.com)
+    """
+    from .cert_manager_deploy import CertManagerDeployer, CertManagerConfig
+    
+    # Test connection first
+    try:
+        client = ProxmoxClient()
+        client.test_connection()
+    except Exception as e:
+        console.print(f"[red]✗[/red] Connection failed: {e}")
+        console.print("\nMake sure your .env file has valid Proxmox credentials.")
+        raise typer.Exit(1)
+    
+    # Deploy
+    deployer = CertManagerDeployer(client)
+    
+    # Override staging if specified
+    config = None
+    if staging:
+        from .cert_manager_deploy import CertManagerConfig
+        config = CertManagerConfig()
+        config.staging = True
+    
+    success = deployer.deploy(config=config, dry_run=dry_run)
+    
+    if not success:
+        raise typer.Exit(1)
+
+
+@app.command("delete-lxc")
+def delete_lxc(
+    vmid: int = typer.Argument(..., help="LXC container ID"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """Delete an LXC container."""
+    from .lxc_creator import LXCCreator
+    
+    client = ProxmoxClient()
+    lxc = LXCCreator(client)
+    
+    if not lxc.container_exists(vmid):
+        console.print(f"[red]✗[/red] Container {vmid} not found")
+        raise typer.Exit(1)
+    
+    # Get container info
+    try:
+        config = lxc.get_container_config(vmid)
+        hostname = config.get("hostname", "unknown")
+    except Exception:
+        hostname = "unknown"
+    
+    if not yes:
+        console.print(f"[yellow]Warning:[/yellow] This will delete container {vmid} ({hostname})")
+        response = console.input("Type 'yes' to confirm: ")
+        if response.lower() != "yes":
+            console.print("[dim]Aborted[/dim]")
+            raise typer.Exit(0)
+    
+    console.print(f"[dim]Stopping container {vmid}...[/dim]")
+    try:
+        upid = lxc.stop_container(vmid)
+        client.wait_for_task(upid, timeout=30)
+    except Exception:
+        pass  # Container may already be stopped
+    
+    console.print(f"[dim]Deleting container {vmid}...[/dim]")
+    upid = lxc.delete_container(vmid)
+    client.wait_for_task(upid, timeout=60)
+    
+    console.print(f"[green]✓[/green] Deleted container {vmid} ({hostname})")
+
+
 @app.command("topology")
 def topology():
     """Show network topology (bridges and interfaces)."""

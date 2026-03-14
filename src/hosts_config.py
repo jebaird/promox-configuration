@@ -11,6 +11,7 @@ import re
 import yaml
 
 from .pfsense_config import DnsHost, DhcpReservation, DomainOverride, UPSTREAM_DNS
+from .config import get_default_domain
 
 
 @dataclass
@@ -24,8 +25,11 @@ class HostEntry:
 
 @dataclass
 class HostsConfig:
-    """Parsed hosts configuration."""
-    domain: str = "local"
+    """Parsed hosts configuration.
+    
+    Domain defaults to PFSENSE_DOMAIN env var, or 'local' if not set.
+    """
+    domain: str = field(default_factory=get_default_domain)
     hosts: list[HostEntry] = field(default_factory=list)
     reservations: list[DhcpReservation] = field(default_factory=list)
     domain_overrides: list[DomainOverride] = field(default_factory=list)

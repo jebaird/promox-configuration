@@ -16,6 +16,7 @@ from .proxmox_client import ProxmoxClient
 from .network import NetworkManager
 from .pfsense_config import DnsHost, DhcpReservation, DomainOverride, UPSTREAM_DNS
 from .hosts_config import HostsConfig, load_hosts_config, parse_hosts_config
+from .config import get_default_domain, get_lan_subnet
 
 console = Console()
 
@@ -80,7 +81,14 @@ class DeploymentWizard:
         self.config = WizardConfig()
         self.hosts_config: HostsConfig | None = None
         
-        # Load hosts file if provided
+        # Apply environment variable defaults
+        subnet = get_lan_subnet()
+        self.config.domain = get_default_domain()
+        self.config.lan_ip = f"{subnet}.1"
+        self.config.dhcp_start = f"{subnet}.100"
+        self.config.dhcp_end = f"{subnet}.254"
+        
+        # Load hosts file if provided (overrides env defaults)
         if hosts_path and hosts_path.exists():
             try:
                 self.hosts_config = load_hosts_config(hosts_path)

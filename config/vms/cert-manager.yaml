@@ -1,0 +1,67 @@
+# Certificate Manager LXC Container Configuration
+# ===============================================
+# Automated SSL certificate management using Let's Encrypt
+# with Cloudflare DNS challenge for wildcard certificates.
+
+container:
+  # Container identifier (100-999999)
+  vmid: 105
+  hostname: "cert-manager"
+  description: "SSL certificate manager - issues and distributes Let's Encrypt certs"
+  
+  # Container type
+  type: "lxc"
+  
+  # Template to use (will be downloaded if not present)
+  template: "debian-12-standard"
+  template_storage: "local"
+  
+  # Start on Proxmox boot
+  onboot: true
+  
+  # Resource allocation (minimal - certbot is lightweight)
+  resources:
+    cores: 1
+    memory: 256  # MB
+    swap: 256    # MB
+    
+  # Root filesystem
+  rootfs:
+    storage: "local-lvm"
+    size: "2G"
+
+# Network configuration
+network:
+  # Use static IP for reliable cert distribution
+  interface: "eth0"
+  bridge: "vmbr0"  # Use existing bridge (vmbr1 LAN bridge may not exist yet)
+  ip: "10.0.0.5/24"
+  gateway: "10.0.0.2"
+  
+# SSH configuration
+ssh:
+  # Enable SSH for management and cert distribution
+  enabled: true
+  # Generate keypair for distributing certs to other hosts
+  generate_keypair: true
+
+# Certificate settings
+certificates:
+  # Domain to issue certificates for
+  # Uses PFSENSE_DOMAIN from env if set, otherwise uses this
+  # domain: "lab.example.com"
+  
+  # Issue wildcard certificate (*.domain + domain)
+  wildcard: true
+  
+  # Let's Encrypt settings
+  letsencrypt:
+    # Use staging for testing (doesn't count against rate limits)
+    staging: false
+    # Email for certificate notifications
+    # email: "admin@example.com"
+    
+  # Renewal settings
+  renewal:
+    # Check for renewal every N hours (certbot checks if cert expires in <30 days)
+    check_interval_hours: 12

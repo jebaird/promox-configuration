@@ -114,3 +114,63 @@ def load_credentials() -> tuple[str, str]:
 def get_ca_cert_path() -> str | None:
     """Get custom CA certificate path from environment."""
     return os.getenv("PROXMOX_CA_CERT")
+
+
+def get_default_domain() -> str:
+    """Get default domain name from environment.
+    
+    Returns:
+        Domain from PFSENSE_DOMAIN env var, or 'local' if not set
+    """
+    # Load .env file if it exists
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+    
+    return os.getenv("PFSENSE_DOMAIN", "local")
+
+
+def get_lan_subnet() -> str:
+    """Get default LAN subnet from environment.
+    
+    Returns:
+        LAN subnet from PFSENSE_LAN_SUBNET env var, or '10.0.0' if not set.
+        Format: '10.0.0' (without trailing dot)
+    """
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+    
+    return os.getenv("PFSENSE_LAN_SUBNET", "10.0.0")
+
+
+def get_cloudflare_credentials() -> tuple[str, str]:
+    """Get Cloudflare API credentials from environment.
+    
+    Returns:
+        Tuple of (api_token, zone)
+        
+    Raises:
+        ValueError: If credentials are not configured
+    """
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+    
+    api_token = os.getenv("CLOUDFLARE_API_TOKEN")
+    zone = os.getenv("CLOUDFLARE_ZONE")
+    
+    if not api_token:
+        raise ValueError(
+            "Cloudflare API token not configured. "
+            "Set CLOUDFLARE_API_TOKEN in .env file. "
+            "Create token at: https://dash.cloudflare.com/profile/api-tokens"
+        )
+    
+    if not zone:
+        raise ValueError(
+            "Cloudflare zone not configured. "
+            "Set CLOUDFLARE_ZONE in .env file (e.g., CLOUDFLARE_ZONE=example.com)"
+        )
+    
+    return api_token, zone

@@ -8,6 +8,8 @@ from typing import Any, TYPE_CHECKING
 
 from passlib.hash import bcrypt
 
+from .config import get_default_domain, get_lan_subnet
+
 if TYPE_CHECKING:
     from .wizard import WizardConfig
 
@@ -55,13 +57,15 @@ class PfSenseConfigBuilder:
     """Builder for pfSense config.xml files."""
     
     def __init__(self):
-        """Initialize builder with default values."""
+        """Initialize builder with default values from environment."""
+        subnet = get_lan_subnet()
+        
         self._hostname = "pfsense"
-        self._domain = "localdomain"
-        self._lan_ip = "10.0.0.1"
+        self._domain = get_default_domain()
+        self._lan_ip = f"{subnet}.1"
         self._lan_subnet = 24
-        self._dhcp_start = "10.0.0.100"
-        self._dhcp_end = "10.0.0.254"
+        self._dhcp_start = f"{subnet}.100"
+        self._dhcp_end = f"{subnet}.254"
         self._admin_password = ""
         self._ssh_enabled = True
         self._timestamp = int(time.time())
@@ -86,7 +90,7 @@ class PfSenseConfigBuilder:
         """Set local domain for DNS.
         
         Args:
-            domain: Domain name (e.g., 'lab.jebaird.com')
+            domain: Domain name (e.g., 'local', 'home.lan', 'lab.example.com')
         """
         self._domain = domain
         return self
@@ -219,7 +223,7 @@ class PfSenseConfigBuilder:
         Use this to resolve external domains to internal IPs.
         
         Args:
-            domain: Full domain name (e.g., 'plex.jebaird.com')
+            domain: Full domain name (e.g., 'plex.example.com')
             ip: Internal IP address
             description: Optional description
         """
