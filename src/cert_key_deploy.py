@@ -374,15 +374,20 @@ class CertKeyDeployer:
         table = Table(title="Certificate Distribution Targets")
         table.add_column("Name", style="cyan")
         table.add_column("Host", style="green")
-        table.add_column("Cert Path")
+        table.add_column("Cert/Fullchain Path")
         table.add_column("Key Path")
         table.add_column("Reload Command")
         
         for target in targets:
+            # Show cert_path or fullchain_path (whichever is configured)
+            cert_display = target.cert_path or target.fullchain_path or "-"
+            if target.fullchain_path and not target.cert_path:
+                cert_display = f"{target.fullchain_path} (fullchain)"
+            
             table.add_row(
                 target.name,
                 target.host,
-                target.cert_path or "-",
+                cert_display,
                 target.key_path or "-",
                 target.reload_cmd[:30] + "..." if len(target.reload_cmd) > 30 else target.reload_cmd or "-",
             )

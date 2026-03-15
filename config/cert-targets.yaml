@@ -9,9 +9,9 @@
 # Distribution targets
 # Each target needs SSH access from cert-manager container
 targets:
-  # pfSense Router
+  # pfSense Router (enable after SSH is configured on pfSense)
   pfsense:
-    enabled: true
+    enabled: false
     host: "10.0.0.1"
     user: "root"
     # Certificate paths on pfSense
@@ -28,8 +28,8 @@ targets:
     enabled: true
     host: "10.0.0.3"
     user: "root"
-    # Proxmox expects specific cert/key paths
-    cert_path: "/etc/pve/local/pveproxy-ssl.pem"
+    # Proxmox expects fullchain (cert + intermediate CA) at pveproxy-ssl.pem
+    fullchain_path: "/etc/pve/local/pveproxy-ssl.pem"
     key_path: "/etc/pve/local/pveproxy-ssl.key"
     # Restart pveproxy to apply new cert
     reload_cmd: "systemctl restart pveproxy"
