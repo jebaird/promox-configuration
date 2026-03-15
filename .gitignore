@@ -3,6 +3,10 @@
 *.pem
 *.key
 
+# Data directory (contains management keys)
+data/*
+!data/.gitkeep
+
 # Python
 __pycache__/
 *.py[cod]

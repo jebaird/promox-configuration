@@ -9,6 +9,10 @@ services:
       - ./config:/app/config:ro
       # Mount .env for credentials (if not using env_file)
       - ./.env:/app/.env:ro
+      # Mount templates (read-only)
+      - ./templates:/app/templates:ro
+      # Mount data directory for persistent files (management keys, etc)
+      - ./data:/app/data
     # Override entrypoint for interactive shell
     # entrypoint: /bin/bash
     # stdin_open: true

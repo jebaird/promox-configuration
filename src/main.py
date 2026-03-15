@@ -435,6 +435,117 @@ def deploy_cert_manager(
         raise typer.Exit(1)
 
 
+@app.command("setup-cert-targets")
+def setup_cert_targets(
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be done"),
+):
+    """
+    Deploy SSH keys and receiver scripts to certificate targets.
+    
+    This sets up secure, restricted SSH access from the cert-manager
+    container to each target defined in config/cert-targets.yaml.
+    
+    The SSH keys are restricted to:
+    - Only connect from the LAN IP range
+    - Only execute the cert-receive.sh script (no shell access)
+    - No port forwarding, X11, or agent forwarding
+    
+    You will be prompted for the root password of each target.
+    
+    Prerequisites:
+    - cert-manager container must be deployed (deploy-cert-manager)
+    - .cert-manager.key file must exist (created during deployment)
+    - Targets must have SSH enabled
+    """
+    from .cert_key_deploy import CertKeyDeployer
+    from .config import load_yaml
+    
+    # Check for management key
+    key_file = Path(__file__).parent.parent / "data" / ".cert-manager.key"
+    if not key_file.exists():
+        console.print("[red]✗[/red] Management key not found: data/.cert-manager.key")
+        console.print("Run [bold]deploy-cert-manager[/bold] first to create the cert-manager container.")
+        raise typer.Exit(1)
+    
+    # Load cert-manager config to get IP
+    config_path = Path(__file__).parent.parent / "config" / "vms" / "cert-manager.yaml"
+    cert_manager_ip = "10.0.0.5"  # Default
+    
+    if config_path.exists():
+        import yaml
+        with open(config_path) as f:
+            cm_config = yaml.safe_load(f)
+        network = cm_config.get("network", {})
+        ip_str = network.get("ip", "10.0.0.5/24")
+        cert_manager_ip = ip_str.split("/")[0]
+    
+    # Read management key
+    private_key = key_file.read_text()
+    
+    console.print(f"[bold]Setting up certificate distribution targets[/bold]")
+    console.print(f"Cert-manager: {cert_manager_ip}\n")
+    
+    # Deploy to targets
+    deployer = CertKeyDeployer(
+        cert_manager_ip=cert_manager_ip,
+        cert_manager_key=private_key,
+    )
+    
+    result = deployer.deploy_all_targets(dry_run=dry_run)
+    
+    if not result.get("success", False):
+        raise typer.Exit(1)
+
+
+@app.command("verify-cert-targets")
+def verify_cert_targets():
+    """
+    Verify cert-manager can reach all configured targets.
+    
+    Tests SSH connectivity from the cert-manager container to each
+    target defined in config/cert-targets.yaml.
+    
+    Prerequisites:
+    - cert-manager container must be deployed
+    - setup-cert-targets must have been run
+    """
+    from .cert_key_deploy import CertKeyDeployer
+    
+    # Check for management key
+    key_file = Path(__file__).parent.parent / "data" / ".cert-manager.key"
+    if not key_file.exists():
+        console.print("[red]✗[/red] Management key not found: data/.cert-manager.key")
+        console.print("Run [bold]deploy-cert-manager[/bold] first.")
+        raise typer.Exit(1)
+    
+    # Load cert-manager config to get IP
+    config_path = Path(__file__).parent.parent / "config" / "vms" / "cert-manager.yaml"
+    cert_manager_ip = "10.0.0.5"  # Default
+    
+    if config_path.exists():
+        import yaml
+        with open(config_path) as f:
+            cm_config = yaml.safe_load(f)
+        network = cm_config.get("network", {})
+        ip_str = network.get("ip", "10.0.0.5/24")
+        cert_manager_ip = ip_str.split("/")[0]
+    
+    # Read management key
+    private_key = key_file.read_text()
+    
+    # Verify targets
+    deployer = CertKeyDeployer(
+        cert_manager_ip=cert_manager_ip,
+        cert_manager_key=private_key,
+    )
+    
+    results = deployer.verify_targets()
+    
+    # Check if all passed
+    if not all(r.get("success", False) for r in results.values()):
+        raise typer.Exit(1)
+
+
 @app.command("delete-lxc")
 def delete_lxc(
     vmid: int = typer.Argument(..., help="LXC container ID"),

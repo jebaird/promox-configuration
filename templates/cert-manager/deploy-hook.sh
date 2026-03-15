@@ -3,10 +3,12 @@
 # ==============================
 # This script runs after certbot renews certificates.
 # It distributes the new certificates to all configured targets.
+#
+# Works with restricted SSH access via cert-receive.sh on targets.
 
 set -e
 
-# Load configuration
+# Configuration
 TARGETS_FILE="/etc/cert-manager/targets.yaml"
 CERT_DIR="/etc/letsencrypt/live"
 LOG_FILE="/var/log/cert-distribution.log"
@@ -16,7 +18,7 @@ log() {
 }
 
 # Find the domain directory (first one in live/)
-DOMAIN_DIR=$(ls -1 "$CERT_DIR" | head -1)
+DOMAIN_DIR=$(ls -1 "$CERT_DIR" 2>/dev/null | head -1)
 if [ -z "$DOMAIN_DIR" ]; then
     log "ERROR: No certificate directory found in $CERT_DIR"
     exit 1
@@ -40,9 +42,7 @@ if [ ! -f "$TARGETS_FILE" ]; then
     exit 0
 fi
 
-# Parse YAML and distribute to each target
-# Using a simple approach since we can't guarantee yq is installed
-
+# Distribute to a single target using restricted SSH
 distribute_to_target() {
     local name="$1"
     local host="$2"
@@ -50,61 +50,85 @@ distribute_to_target() {
     local cert_dest="$4"
     local key_dest="$5"
     local fullchain_dest="$6"
-    local reload_cmd="$7"
     
     log "--- Distributing to $name ($host) ---"
     
-    # Test SSH connection first
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$user@$host" "echo ok" > /dev/null 2>&1; then
-        log "ERROR: Cannot connect to $user@$host - skipping"
+    local ssh_opts="-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no"
+    local success=true
+    
+    # Test connection using restricted 'test' command
+    if ! ssh $ssh_opts "$user@$host" "test" 2>/dev/null | grep -q "OK"; then
+        log "ERROR: Cannot connect to $user@$host (restricted SSH) - skipping"
         return 1
     fi
     
-    # Copy certificate
-    if [ -n "$cert_dest" ]; then
-        log "Copying cert to $cert_dest"
-        scp -q "$CERT_PATH" "$user@$host:$cert_dest"
+    # Send certificate
+    if [ -n "$cert_dest" ] && [ -f "$CERT_PATH" ]; then
+        log "Sending cert to $cert_dest"
+        if ssh $ssh_opts "$user@$host" "receive cert $cert_dest" < "$CERT_PATH" 2>&1 | tee -a "$LOG_FILE" | grep -q "^OK:"; then
+            log "Cert delivered successfully"
+        else
+            log "ERROR: Failed to send cert"
+            success=false
+        fi
     fi
     
-    # Copy private key
-    if [ -n "$key_dest" ]; then
-        log "Copying key to $key_dest"
-        scp -q "$KEY_PATH" "$user@$host:$key_dest"
+    # Send private key
+    if [ -n "$key_dest" ] && [ -f "$KEY_PATH" ]; then
+        log "Sending key to $key_dest"
+        if ssh $ssh_opts "$user@$host" "receive key $key_dest" < "$KEY_PATH" 2>&1 | tee -a "$LOG_FILE" | grep -q "^OK:"; then
+            log "Key delivered successfully"
+        else
+            log "ERROR: Failed to send key"
+            success=false
+        fi
     fi
     
-    # Copy fullchain
-    if [ -n "$fullchain_dest" ]; then
-        log "Copying fullchain to $fullchain_dest"
-        scp -q "$FULLCHAIN_PATH" "$user@$host:$fullchain_dest"
+    # Send fullchain
+    if [ -n "$fullchain_dest" ] && [ -f "$FULLCHAIN_PATH" ]; then
+        log "Sending fullchain to $fullchain_dest"
+        if ssh $ssh_opts "$user@$host" "receive fullchain $fullchain_dest" < "$FULLCHAIN_PATH" 2>&1 | tee -a "$LOG_FILE" | grep -q "^OK:"; then
+            log "Fullchain delivered successfully"
+        else
+            log "ERROR: Failed to send fullchain"
+            success=false
+        fi
     fi
     
-    # Reload service
-    if [ -n "$reload_cmd" ]; then
-        log "Running reload command: $reload_cmd"
-        ssh "$user@$host" "$reload_cmd" 2>&1 | tee -a "$LOG_FILE" || true
+    # Trigger reload on target
+    log "Triggering reload on $name"
+    if ssh $ssh_opts "$user@$host" "reload" 2>&1 | tee -a "$LOG_FILE" | grep -q "^OK:"; then
+        log "Reload successful"
+    else
+        log "WARNING: Reload may have failed (check target logs)"
     fi
     
-    log "Completed: $name"
-    return 0
+    if $success; then
+        log "Completed: $name"
+        return 0
+    else
+        log "Completed with errors: $name"
+        return 1
+    fi
 }
 
-# Distribution targets (edit these or use targets.yaml)
-# Format: distribute_to_target "name" "host" "user" "cert_path" "key_path" "fullchain_path" "reload_cmd"
-
-# Check for Python/yq to parse YAML, otherwise use hardcoded defaults
+# Parse targets.yaml and distribute
 if command -v python3 &> /dev/null; then
     # Parse targets.yaml with Python
     python3 << 'PYEOF'
 import yaml
 import subprocess
-import sys
+import os
 
 with open('/etc/cert-manager/targets.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
 targets = config.get('targets', {})
+failed = []
+
 for name, target in targets.items():
     if not target.get('enabled', True):
+        print(f"Skipping {name}: disabled")
         continue
         
     host = target.get('host', '')
@@ -112,27 +136,35 @@ for name, target in targets.items():
     cert_path = target.get('cert_path', '')
     key_path = target.get('key_path', '')
     fullchain_path = target.get('fullchain_path', '')
-    reload_cmd = target.get('reload_cmd', '')
     
     if not host:
         print(f"Skipping {name}: no host configured")
         continue
     
-    # Call the distribute function via bash
-    cmd = f'distribute_to_target "{name}" "{host}" "{user}" "{cert_path}" "{key_path}" "{fullchain_path}" "{reload_cmd}"'
     print(f"Distributing to {name}...")
     
-    # Export function and call it
-    result = subprocess.run(['bash', '-c', f'source /etc/letsencrypt/renewal-hooks/deploy/distribute-certs.sh && {cmd}'], 
-                          capture_output=False)
+    # Build and run the distribute command
+    cmd = f'distribute_to_target "{name}" "{host}" "{user}" "{cert_path}" "{key_path}" "{fullchain_path}"'
+    
+    # Source this script and run the function
+    script_path = os.environ.get('BASH_SOURCE', '/etc/letsencrypt/renewal-hooks/deploy/distribute-certs.sh')
+    result = subprocess.run(
+        ['bash', '-c', f'source "{script_path}" 2>/dev/null; {cmd}'],
+        capture_output=False
+    )
+    
+    if result.returncode != 0:
+        failed.append(name)
+
+if failed:
+    print(f"WARNING: Distribution failed for: {', '.join(failed)}")
+else:
+    print("All targets updated successfully")
 PYEOF
 else
-    # Fallback: Use hardcoded targets if YAML parsing not available
-    log "Python not available, using hardcoded targets"
-    
-    # Example targets - edit these if not using targets.yaml
-    # distribute_to_target "pfsense" "10.0.0.1" "root" "/etc/ssl/cert.pem" "/etc/ssl/key.pem" "/etc/ssl/fullchain.pem" "/etc/rc.restart_webgui"
-    # distribute_to_target "proxmox" "10.0.0.3" "root" "/etc/pve/local/pveproxy-ssl.pem" "/etc/pve/local/pveproxy-ssl.key" "" "systemctl restart pveproxy"
+    log "ERROR: Python3 not available for YAML parsing"
+    log "Install python3 or edit this script with hardcoded targets"
+    exit 1
 fi
 
 log "=== Certificate distribution complete ==="

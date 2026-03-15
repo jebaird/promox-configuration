@@ -343,6 +343,13 @@ class CertManagerDeployer:
                 progress.update(task, description="[yellow]⚠[/yellow] Certificate verification failed")
                 console.print(f"\n[yellow]Warning: {verification_result['message']}[/yellow]")
         
+        # Save management key for future use (setup-cert-targets)
+        data_dir = Path(__file__).parent.parent / "data"
+        data_dir.mkdir(exist_ok=True)
+        key_file = data_dir / ".cert-manager.key"
+        key_file.write_text(private_key_pem)
+        key_file.chmod(0o600)
+        
         # Show completion message
         self._show_completion(config, ssh_public_key, verification_result)
         return verification_result["success"]
@@ -425,6 +432,27 @@ class CertManagerDeployer:
             console.print("[dim]  Enabling auto-renewal...[/dim]")
             ssh.execute("systemctl enable certbot.timer", check=True)
             ssh.execute("systemctl start certbot.timer", check=True)
+            
+            # Install deploy hook for certificate distribution
+            console.print("[dim]  Installing deploy hook...[/dim]")
+            deploy_hook_path = TEMPLATES_DIR / "deploy-hook.sh"
+            if deploy_hook_path.exists():
+                deploy_hook_content = deploy_hook_path.read_text()
+                ssh.execute("mkdir -p /etc/letsencrypt/renewal-hooks/deploy", check=True)
+                ssh.write_file(
+                    "/etc/letsencrypt/renewal-hooks/deploy/distribute-certs.sh",
+                    deploy_hook_content,
+                    mode=0o755,
+                )
+            
+            # Install cert-targets.yaml for distribution configuration
+            targets_path = Path(__file__).parent.parent / "config" / "cert-targets.yaml"
+            if targets_path.exists():
+                targets_content = targets_path.read_text()
+                ssh.write_file("/etc/cert-manager/targets.yaml", targets_content)
+            
+            # Install pyyaml for deploy hook
+            ssh.execute("apt-get install -y python3-yaml", timeout=60)
             
             # Disable password authentication (key-only for future)
             console.print("[dim]  Hardening SSH config...[/dim]")
@@ -524,14 +552,15 @@ class CertManagerDeployer:
 [bold]Container Info:[/bold]
   VMID: {config.vmid}
   IP: {config.ip}
-  SSH: ssh root@{config.ip} (password auth disabled)
+  SSH: ssh root@{config.ip} (key auth only)
+  Management key: data/.cert-manager.key (saved for setup-cert-targets)
 {cert_info}
-[bold]SSH Public Key (add to target hosts):[/bold]
+[bold]Certificate Distribution Key:[/bold]
 [cyan]{ssh_public_key}[/cyan]
 
 [bold]Next Steps:[/bold]
-1. Add the SSH public key above to each target host's /root/.ssh/authorized_keys
-2. Configure cert distribution in /etc/cert-manager/targets.yaml
+1. Run [bold]setup-cert-targets[/bold] to automatically deploy SSH keys to targets
+2. Or manually add the key above to target hosts' /root/.ssh/authorized_keys
 3. Test: ssh root@{config.ip} certbot certificates
 
 [bold]Manual cert distribution:[/bold]
