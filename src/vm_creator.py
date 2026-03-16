@@ -69,7 +69,11 @@ class VMCreator:
         
         # Storage - build disk specification
         disk = storage_config["disk"]
-        disk_spec = f"{disk['storage']}:{disk['size']}"
+        # Extract numeric size (strip G/GB suffix for LVM compatibility)
+        size = disk['size']
+        if isinstance(size, str):
+            size = size.upper().rstrip("GB").rstrip("G")
+        disk_spec = f"{disk['storage']}:{size}"
         disk_opts = []
         
         if disk.get("format"):
@@ -78,7 +82,9 @@ class VMCreator:
             disk_opts.append(f"cache={disk['cache']}")
         if disk.get("discard"):
             disk_opts.append("discard=on")
-        if disk.get("ssd"):
+        # ssd option only valid for SCSI controllers, not VirtIO
+        interface = disk.get("interface", "virtio0")
+        if disk.get("ssd") and interface.startswith("scsi"):
             disk_opts.append("ssd=1")
         
         if disk_opts:

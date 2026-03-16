@@ -1,0 +1,60 @@
+# Alpine Linux Test Client Configuration
+# =======================================
+# Lightweight VM for testing DHCP/DNS from the pfSense test instance.
+# Auto-configures as DHCP client on boot.
+
+vm:
+  vmid: 199
+  name: "test-client"
+  description: "Alpine Linux test client - DHCP/DNS validation"
+  
+  bios: "seabios"
+  boot_order: "cdn"
+  onboot: false  # Don't auto-start test VMs
+  
+  resources:
+    cores: 1
+    sockets: 1
+    memory: 256       # Alpine runs fine with minimal RAM
+    balloon: 0
+  
+  cpu:
+    type: "host"
+
+storage:
+  disk:
+    storage: "local-lvm"
+    size: "1G"        # Minimal disk - Alpine is tiny
+    format: "raw"
+    cache: "writeback"
+    discard: true
+    ssd: true
+    interface: "virtio0"
+
+# Single interface on isolated test bridge
+network:
+  - interface: "net0"
+    bridge: "vmbr2"
+    model: "virtio"
+    firewall: false
+    tag: null
+    comment: "Test network (DHCP client)"
+
+# Alpine Linux Virtual ISO
+# Uses Proxmox's cloud-init or manual Alpine ISO
+iso:
+  # Alpine Virtual edition - optimized for VMs
+  # Download from: https://alpinelinux.org/downloads/
+  # Look for "Virtual" x86_64 ISO (~50MB)
+  version: "3.19"
+  architecture: "x86_64"
+  storage: "local"
+  filename: "alpine-virt-3.19.1-x86_64.iso"
+  # Manual download URL (informational):
+  # https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-virt-3.19.1-x86_64.iso
+
+# Test validation commands to run after boot:
+# 1. ip addr                    - Verify DHCP lease in 192.168.99.100-254 range
+# 2. ip route                   - Verify gateway is 192.168.99.1
+# 3. ping 192.168.99.1          - Verify gateway reachable
+# 4. nslookup pfsense-test.test.local 192.168.99.1  - Verify DNS resolution

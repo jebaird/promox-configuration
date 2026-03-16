@@ -1,0 +1,65 @@
+# pfSense Test VM Configuration
+# ==============================
+# Isolated test instance for validating DNS/DHCP without affecting production.
+# Uses vmbr2 (isolated bridge) and 192.168.99.0/24 subnet.
+
+vm:
+  vmid: 101
+  name: "pfsense-test"
+  description: "pfSense test instance - isolated 192.168.99.0/24 network"
+  
+  bios: "seabios"
+  boot_order: "cdn"
+  onboot: false  # Don't auto-start test VMs
+  
+  resources:
+    cores: 1          # Minimal resources for testing
+    sockets: 1
+    memory: 2048      # 2GB sufficient for testing
+    balloon: 0
+  
+  cpu:
+    type: "host"
+
+storage:
+  disk:
+    storage: "local-lvm"
+    size: "8G"        # Smaller disk for test instance
+    format: "raw"
+    cache: "writeback"
+    discard: true
+    ssd: true
+    interface: "virtio0"
+
+# Both interfaces on isolated vmbr2 bridge
+# pfSense will see vtnet0 as "WAN" and vtnet1 as "LAN"
+# but both are on the same isolated network
+network:
+  - interface: "net0"
+    bridge: "vmbr2"
+    model: "virtio"
+    firewall: false
+    tag: null
+    comment: "WAN (isolated)"
+  
+  - interface: "net1"
+    bridge: "vmbr2"
+    model: "virtio"
+    firewall: false
+    tag: null
+    comment: "LAN (isolated)"
+
+iso:
+  version: "2.7.2"
+  architecture: "amd64"
+  storage: "local"
+
+# Test network configuration
+# These values are used by the test environment deployer
+test_network:
+  subnet: "192.168.99.0/24"
+  lan_ip: "192.168.99.1"
+  lan_netmask: 24
+  dhcp_start: "192.168.99.100"
+  dhcp_end: "192.168.99.254"
+  domain: "test.local"

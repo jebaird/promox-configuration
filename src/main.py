@@ -597,6 +597,122 @@ def topology():
     manager.print_topology_table()
 
 
+# ---------------------------------------------------------------------------
+# Test Environment Commands
+# ---------------------------------------------------------------------------
+
+test_env_app = typer.Typer(help="Isolated test environment for safe experimentation")
+app.add_typer(test_env_app, name="test-env")
+
+
+@test_env_app.command("status")
+def test_env_status():
+    """Show test environment status."""
+    from .test_env import TestEnvironment
+    
+    client = ProxmoxClient()
+    env = TestEnvironment(client)
+    env.print_status()
+
+
+@test_env_app.command("create")
+def test_env_create(
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be done"),
+    skip_client: bool = typer.Option(False, "--skip-client", help="Skip Alpine test client"),
+    skip_iso: bool = typer.Option(False, "--skip-iso", help="Skip ISO download (upload manually later)"),
+):
+    """
+    Create isolated test environment.
+    
+    Sets up a completely isolated network for testing pfSense configuration:
+    
+    - Creates vmbr2 bridge (no physical interface = isolated)
+    - Creates pfSense test VM (VMID 101) on 192.168.99.1
+    - Creates Alpine Linux test client (VMID 199) for DHCP/DNS testing
+    
+    The test network uses subnet 192.168.99.0/24, completely separate from
+    your production 10.0.0.x network. Your internet stays untouched.
+    
+    After creation, complete pfSense installation via Proxmox console.
+    """
+    from .test_env import TestEnvironment
+    
+    try:
+        client = ProxmoxClient()
+        client.test_connection()
+    except Exception as e:
+        console.print(f"[red]✗[/red] Connection failed: {e}")
+        raise typer.Exit(1)
+    
+    env = TestEnvironment(client)
+    success = env.create(skip_client=skip_client, skip_iso=skip_iso, dry_run=dry_run)
+    
+    if not success:
+        raise typer.Exit(1)
+
+
+@test_env_app.command("destroy")
+def test_env_destroy(
+    force: bool = typer.Option(False, "--force", "-f", help="Stop running VMs before deleting"),
+    keep_bridge: bool = typer.Option(False, "--keep-bridge", help="Keep the vmbr2 bridge"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """
+    Destroy test environment.
+    
+    Removes the test pfSense VM, test client, and optionally the test bridge.
+    """
+    from .test_env import TestEnvironment
+    
+    try:
+        client = ProxmoxClient()
+        client.test_connection()
+    except Exception as e:
+        console.print(f"[red]✗[/red] Connection failed: {e}")
+        raise typer.Exit(1)
+    
+    if not yes:
+        console.print("[yellow]Warning:[/yellow] This will delete the test environment VMs")
+        response = console.input("Type 'yes' to confirm: ")
+        if response.lower() != "yes":
+            console.print("[dim]Aborted[/dim]")
+            raise typer.Exit(0)
+    
+    env = TestEnvironment(client)
+    success = env.destroy(keep_bridge=keep_bridge, force=force)
+    
+    if not success:
+        raise typer.Exit(1)
+
+
+@test_env_app.command("start")
+def test_env_start():
+    """Start test environment VMs."""
+    from .test_env import TestEnvironment
+    
+    try:
+        client = ProxmoxClient()
+        env = TestEnvironment(client)
+        env.start()
+    except Exception as e:
+        console.print(f"[red]✗[/red] Error: {e}")
+        raise typer.Exit(1)
+
+
+@test_env_app.command("stop")
+def test_env_stop():
+    """Stop test environment VMs."""
+    from .test_env import TestEnvironment
+    
+    try:
+        client = ProxmoxClient()
+        env = TestEnvironment(client)
+        env.stop()
+    except Exception as e:
+        console.print(f"[red]✗[/red] Error: {e}")
+        raise typer.Exit(1)
+
+
 def main():
     """Entry point."""
     app()

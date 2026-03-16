@@ -23,3 +23,11 @@ bridges:
     physical_interface: ""
     # IP configuration for bridge interface (optional)
     # address: "10.0.0.1/24"  # Uncomment if Proxmox host needs an IP on this network
+
+  # Test bridge - completely isolated network for testing
+  # No physical interface = traffic stays inside Proxmox
+  test:
+    name: "vmbr2"
+    exists: false
+    comment: "TEST - Isolated test network (no external connectivity)"
+    physical_interface: ""  # Intentionally empty for isolation

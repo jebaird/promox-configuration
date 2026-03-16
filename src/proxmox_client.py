@@ -197,6 +197,17 @@ class ProxmoxClient:
         """Revert pending network configuration changes."""
         self.api.nodes(self.node).network.delete()
     
+    def delete_network_interface(self, iface: str) -> None:
+        """Delete a network interface (bridge, bond, etc.).
+        
+        Args:
+            iface: Interface name (e.g., 'vmbr2')
+            
+        Note:
+            Changes are staged. Call apply_network_config() to apply.
+        """
+        self.api.nodes(self.node).network(iface).delete()
+    
     # -------------------------------------------------------------------------
     # VM operations
     # -------------------------------------------------------------------------
