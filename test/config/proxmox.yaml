@@ -1,0 +1,16 @@
+# Proxmox VE Test Instance Connection Configuration
+# ==================================================
+# Points to the local Proxmox VE 9.1 container started by docker-compose.test.yaml.
+#
+# The hostname "proxmox" resolves via the Docker Compose network to the QEMU
+# container running Proxmox VE.  When running proxmox-config outside of Docker
+# Compose, use "localhost" instead (override with PROXMOX_HOST env var).
+
+host: "proxmox"
+port: 8006
+node: "pve"
+verify_ssl: false
+
+# Timeouts – the QEMU-backed instance may be slower than bare-metal
+connection_timeout: 60
+read_timeout: 600
