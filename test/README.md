@@ -25,48 +25,59 @@ a Docker container.  This gives you a **real** Proxmox API endpoint on
 
 ## Quick Start
 
+A wrapper script (`proxmox-test.ps1`) is provided to simplify all test-instance
+operations.  It follows the same pattern as `proxmox-config.ps1`.
+
 ```bash
-# 1. Copy the credential template
-cp test/.env.example test/.env
+# 1. Start the Proxmox VE container (creates test/.env and downloads the ISO on first run)
+.\proxmox-test.ps1 start
 
-# 2. Start the Proxmox VE container (downloads the ISO on first run)
-docker compose -f docker-compose.test.yaml up -d proxmox
+# 2. Follow the boot progress
+.\proxmox-test.ps1 logs
 
-# 3. Follow the boot progress
-docker compose -f docker-compose.test.yaml logs -f proxmox
-
-# 4. Open the Proxmox web UI and complete the installer
+# 3. Open the Proxmox web UI and complete the installer
 #    https://localhost:8006
 
-# 5. After installation, create an API token in the web UI:
+# 4. After installation, create an API token in the web UI:
 #    Datacenter → Permissions → API Tokens → Add
 #    - User: root@pam
 #    - Token ID: test
 #    - Privilege Separation: unchecked
 #    Copy the secret and paste it into test/.env
 
-# 6. Verify the CLI can connect
-docker compose -f docker-compose.test.yaml run --rm proxmox-config test
+# 5. Verify the CLI can connect
+.\proxmox-test.ps1 test
 
-# 7. Run any command against the test instance
-docker compose -f docker-compose.test.yaml run --rm proxmox-config network list
-docker compose -f docker-compose.test.yaml run --rm proxmox-config vm list
+# 6. Run any command against the test instance
+.\proxmox-test.ps1 network list
+.\proxmox-test.ps1 vm list
+
+# 7. Check container status
+.\proxmox-test.ps1 status
+```
+
+You can also use `docker compose` directly:
+
+```bash
+docker compose -f docker-compose.test.yaml up -d proxmox
+docker compose -f docker-compose.test.yaml run --rm proxmox-config test
 ```
 
 ## Tearing Down
 
 ```bash
 # Stop containers but keep persistent data (Proxmox installation on disk)
-docker compose -f docker-compose.test.yaml down
+.\proxmox-test.ps1 stop
 
 # Stop and remove all data (next start will re-install from ISO)
-docker compose -f docker-compose.test.yaml down -v
+.\proxmox-test.ps1 destroy
 ```
 
 ## Configuration
 
 | File | Purpose |
 |---|---|
+| `proxmox-test.ps1` | PowerShell wrapper script (start/stop/logs/status + CLI pass-through) |
 | `docker-compose.test.yaml` | Compose file defining the QEMU container and proxmox-config service |
 | `test/config/proxmox.yaml` | Connection settings pointing to the local container |
 | `test/.env` | API token credentials (not committed — see `.env.example`) |

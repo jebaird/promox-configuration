@@ -282,6 +282,7 @@ promox-configuration/
 ├── docker-compose.test.yaml   # Docker Compose config (test instance)
 ├── Dockerfile                 # Container image
 ├── proxmox-config.ps1         # PowerShell wrapper script
+├── proxmox-test.ps1           # PowerShell wrapper for test instance
 ├── pyproject.toml             # Dependencies
 └── README.md
 ```
@@ -292,19 +293,27 @@ A Docker Compose file is provided to run a full Proxmox VE 9.1 instance locally
 using QEMU-in-Docker.  This gives you a real Proxmox API endpoint for
 integration testing without needing dedicated hardware.
 
+A `proxmox-test.ps1` wrapper script (matching the `proxmox-config.ps1` pattern)
+handles starting/stopping the test instance and forwarding CLI commands:
+
 ```bash
 # Start the Proxmox VE 9.1 test instance (requires /dev/kvm)
-docker compose -f docker-compose.test.yaml up -d proxmox
+.\proxmox-test.ps1 start
 
 # Complete the Proxmox installer at https://localhost:8006
 # Then create an API token and add it to test/.env
 
 # Run CLI commands against the test instance
-docker compose -f docker-compose.test.yaml run --rm proxmox-config test
-docker compose -f docker-compose.test.yaml run --rm proxmox-config vm list
+.\proxmox-test.ps1 test
+.\proxmox-test.ps1 vm list
 
-# Tear down
-docker compose -f docker-compose.test.yaml down -v
+# View logs / status
+.\proxmox-test.ps1 logs
+.\proxmox-test.ps1 status
+
+# Tear down (keep data / remove everything)
+.\proxmox-test.ps1 stop
+.\proxmox-test.ps1 destroy
 ```
 
 See [`test/README.md`](test/README.md) for full setup instructions, prerequisites, and
