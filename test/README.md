@@ -71,7 +71,7 @@ docker compose -f docker-compose.test.yaml down -v
 | `test/config/proxmox.yaml` | Connection settings pointing to the local container |
 | `test/.env` | API token credentials (not committed — see `.env.example`) |
 
-### Customising Resources
+### Customizing Resources
 
 Edit the `proxmox` service environment variables in `docker-compose.test.yaml`:
 
