@@ -1,0 +1,8 @@
+# PVE Exporter Configuration
+# Proxmox VE API credentials for metrics collection
+
+default:
+  user: {{PVE_USER}}
+  token_name: {{PVE_TOKEN_NAME}}
+  token_value: {{PVE_TOKEN_VALUE}}
+  verify_ssl: false

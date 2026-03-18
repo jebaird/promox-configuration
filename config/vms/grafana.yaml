@@ -1,0 +1,55 @@
+# Grafana Dashboard Container Configuration
+# ==========================================
+# Visualization and dashboards for Prometheus metrics.
+
+container:
+  vmid: 111
+  hostname: "grafana"
+  description: "Grafana dashboard server for Proxmox monitoring"
+  
+  type: "lxc"
+  template: "debian-12-standard"
+  template_storage: "local"
+  
+  onboot: true
+  
+  # Resource allocation (Grafana is lightweight)
+  resources:
+    cores: 1
+    memory: 512   # 512MB RAM
+    swap: 256     # MB
+
+  rootfs:
+    storage: "local-lvm"
+    size: "8G"
+
+# Network configuration
+network:
+  interface: "eth0"
+  bridge: "vmbr0"
+  ip: "10.0.0.11/24"
+  gateway: "10.0.0.2"
+
+# Grafana settings
+grafana:
+  port: 3000
+  
+  # Initial admin credentials (change after first login)
+  admin_user: "admin"
+  # admin_password: generated or set via env
+  
+  # Anonymous access (disabled by default)
+  anonymous_enabled: false
+
+# Data sources to provision
+datasources:
+  prometheus:
+    url: "http://10.0.0.10:9090"
+    default: true
+
+# Dashboards to provision
+dashboards:
+  # Proxmox VE dashboard from Grafana.com
+  - name: "Proxmox VE"
+    id: 10347  # Grafana.com dashboard ID
+    datasource: "prometheus"

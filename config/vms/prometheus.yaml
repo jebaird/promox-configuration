@@ -1,0 +1,60 @@
+# Prometheus Monitoring Container Configuration
+# =============================================
+# Metrics collection and storage using Prometheus with pve-exporter
+# for Proxmox VE monitoring.
+
+container:
+  vmid: 110
+  hostname: "prometheus"
+  description: "Prometheus metrics server with pve-exporter for Proxmox monitoring"
+  
+  type: "lxc"
+  template: "debian-12-standard"
+  template_storage: "local"
+  
+  onboot: true
+  
+  # Resource allocation
+  # Prometheus needs more resources for metric storage and querying
+  resources:
+    cores: 2
+    memory: 1024  # 1GB RAM
+    swap: 512     # MB
+
+  rootfs:
+    storage: "local-lvm"
+    size: "20G"  # Storage for metrics retention
+
+# Network configuration
+network:
+  interface: "eth0"
+  bridge: "vmbr0"
+  ip: "10.0.0.10/24"
+  gateway: "10.0.0.2"
+
+# Prometheus settings
+prometheus:
+  # Data retention
+  retention:
+    time: "15d"      # Keep 15 days of metrics
+    size: "15GB"     # Max storage size
+  
+  # Scrape interval
+  scrape_interval: "15s"
+  
+  # Web interface port
+  port: 9090
+
+# PVE Exporter settings
+# Collects metrics from Proxmox VE API
+pve_exporter:
+  port: 9221
+  # Uses PROXMOX_HOST, PROXMOX_TOKEN_ID, PROXMOX_TOKEN_SECRET from .env
+
+# Targets to monitor
+# Additional targets can be added here
+targets:
+  proxmox:
+    - name: "pve"
+      host: "10.0.0.3"
+      # node: "pve"  # Optional: specific node name
