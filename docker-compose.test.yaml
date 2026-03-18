@@ -1,0 +1,68 @@
+# Docker Compose configuration for running a local Proxmox VE 9.1 test instance.
+#
+# This uses QEMU-in-Docker to boot a full Proxmox VE 9.1 installation inside a
+# container, providing a real Proxmox API endpoint for integration testing.
+#
+# Prerequisites:
+#   - Docker with KVM support (/dev/kvm available on the host)
+#   - At least 6 GB of free RAM and 40 GB of free disk space
+#
+# Usage:
+#   # Start the Proxmox VE test instance
+#   docker compose -f docker-compose.test.yaml up -d proxmox
+#
+#   # Wait for Proxmox to finish booting (check health or logs)
+#   docker compose -f docker-compose.test.yaml logs -f proxmox
+#
+#   # Run proxmox-config commands against the test instance
+#   docker compose -f docker-compose.test.yaml run --rm proxmox-config test
+#
+#   # Tear down the test environment
+#   docker compose -f docker-compose.test.yaml down
+#
+#   # Tear down and remove persistent data
+#   docker compose -f docker-compose.test.yaml down -v
+
+services:
+  proxmox:
+    image: qemus/qemu-docker
+    container_name: proxmox-test
+    environment:
+      BOOT: "https://download.proxmox.com/iso/proxmox-ve_9.1-1.iso"
+      RAM_SIZE: "4G"
+      CPU_CORES: "2"
+      DISK_SIZE: "32G"
+    devices:
+      - /dev/kvm
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "8006:8006"
+    volumes:
+      - proxmox-storage:/storage
+    stop_grace_period: 2m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsk https://localhost:8006/api2/json || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 5m
+
+  proxmox-config:
+    build: .
+    image: proxmox-config:latest
+    env_file:
+      - ./test/.env
+    volumes:
+      - ./test/config:/app/config:ro
+      - ./test/.env:/app/.env:ro
+      - ./templates:/app/templates:ro
+      - ./data:/app/data
+    depends_on:
+      proxmox:
+        condition: service_healthy
+
+volumes:
+  proxmox-storage:
+    name: proxmox-test-storage
