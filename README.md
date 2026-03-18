@@ -259,26 +259,65 @@ After VM creation, complete setup via Proxmox console:
 ```
 promox-configuration/
 ├── config/
-│   ├── proxmox.yaml      # Proxmox connection
-│   ├── network.yaml      # Bridge definitions
+│   ├── proxmox.yaml          # Proxmox connection
+│   ├── network.yaml          # Bridge definitions
 │   └── vms/
-│       └── pfsense.yaml  # pfSense VM config
+│       └── pfsense.yaml      # pfSense VM config
 ├── src/
 │   ├── __init__.py
-│   ├── config.py         # Config loading
-│   ├── proxmox_client.py # API client
-│   ├── network.py        # Bridge management
-│   ├── iso_manager.py    # ISO download/upload
-│   ├── vm_creator.py     # VM creation
-│   └── main.py           # CLI entry point
-├── .env.example          # Credentials template
+│   ├── config.py             # Config loading
+│   ├── proxmox_client.py     # API client
+│   ├── network.py            # Bridge management
+│   ├── iso_manager.py        # ISO download/upload
+│   ├── vm_creator.py         # VM creation
+│   └── main.py               # CLI entry point
+├── test/
+│   ├── config/
+│   │   └── proxmox.yaml      # Test instance connection settings
+│   ├── .env.example           # Test credential template
+│   └── README.md              # Test environment docs
+├── .env.example               # Credentials template
 ├── .gitignore
-├── docker-compose.yaml   # Docker Compose config
-├── Dockerfile            # Container image
-├── proxmox-config.ps1    # PowerShell wrapper script
-├── pyproject.toml        # Dependencies
+├── docker-compose.yaml        # Docker Compose config (production)
+├── docker-compose.test.yaml   # Docker Compose config (test instance)
+├── Dockerfile                 # Container image
+├── proxmox-config.ps1         # PowerShell wrapper script
+├── proxmox-test.ps1           # PowerShell wrapper for test instance
+├── pyproject.toml             # Dependencies
 └── README.md
 ```
+
+## Testing with a Local Proxmox Instance
+
+A Docker Compose file is provided to run a full Proxmox VE 9.1 instance locally
+using QEMU-in-Docker.  This gives you a real Proxmox API endpoint for
+integration testing without needing dedicated hardware.
+
+A `proxmox-test.ps1` wrapper script (matching the `proxmox-config.ps1` pattern)
+handles starting/stopping the test instance and forwarding CLI commands:
+
+```bash
+# Start the Proxmox VE 9.1 test instance (requires /dev/kvm)
+.\proxmox-test.ps1 start
+
+# Complete the Proxmox installer at https://localhost:8006
+# Then create an API token and add it to test/.env
+
+# Run CLI commands against the test instance
+.\proxmox-test.ps1 test
+.\proxmox-test.ps1 vm list
+
+# View logs / status
+.\proxmox-test.ps1 logs
+.\proxmox-test.ps1 status
+
+# Tear down (keep data / remove everything)
+.\proxmox-test.ps1 stop
+.\proxmox-test.ps1 destroy
+```
+
+See [`test/README.md`](test/README.md) for full setup instructions, prerequisites, and
+troubleshooting.
 
 ## Adding New VMs
 
