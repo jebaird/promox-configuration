@@ -25,25 +25,27 @@
 
 services:
   proxmox:
-    image: qemus/qemu-docker
+    image: qemux/qemu
     container_name: proxmox-test
     environment:
-      BOOT: "https://download.proxmox.com/iso/proxmox-ve_9.1-1.iso"
+      BOOT: "http://download.proxmox.com/iso/proxmox-ve_9.1-1.iso"
       RAM_SIZE: "4G"
       CPU_CORES: "2"
       DISK_SIZE: "32G"
+      PORTS: "8007:8006/tcp"
     devices:
       - /dev/kvm
     cap_add:
       - NET_ADMIN
     ports:
       - "8006:8006"
+      - "8007:8007"
     volumes:
       - proxmox-storage:/storage
     stop_grace_period: 2m
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsk https://localhost:8006/api2/json || exit 1"]
+      test: ["CMD-SHELL", "curl -fsk https://${PROXMOX_VM_IP:-172.30.0.2}:8006/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 20
@@ -52,10 +54,14 @@ services:
   proxmox-config:
     build: .
     image: proxmox-config:latest
+    network_mode: "service:proxmox"
     env_file:
       - ./test/.env
     volumes:
-      - ./test/config:/app/config:ro
+      # Mount main config directory as base
+      - ./config:/app/config:ro
+      # Override with test-specific configs
+      - ./test/config/proxmox.yaml:/app/config/proxmox.yaml:ro
       - ./test/.env:/app/.env:ro
       - ./templates:/app/templates:ro
       - ./data:/app/data

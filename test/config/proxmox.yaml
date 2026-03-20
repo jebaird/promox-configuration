@@ -1,12 +1,18 @@
 # Proxmox VE Test Instance Connection Configuration
 # ==================================================
-# Points to the local Proxmox VE 9.1 container started by docker-compose.test.yaml.
+# Default configuration for the local QEMU-in-Docker test instance.
 #
-# The hostname "proxmox" resolves via the Docker Compose network to the QEMU
-# container running Proxmox VE.  When running proxmox-config outside of Docker
-# Compose, use "localhost" instead (override with PROXMOX_HOST env var).
+# The actual connection settings are controlled via environment variables
+# in test/.env, which override these defaults. This allows testing against
+# different Proxmox servers without modifying this file.
+#
+# Environment variable overrides:
+#   PROXMOX_HOST - Proxmox server IP/hostname
+#   PROXMOX_PORT - API port (default: 8006)
+#   PROXMOX_NODE - Node name (default: pve)
 
-host: "proxmox"
+# Placeholder defaults - overridden by PROXMOX_HOST in test/.env
+host: "localhost"
 port: 8006
 node: "pve"
 verify_ssl: false
