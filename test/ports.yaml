@@ -1,0 +1,42 @@
+# Test Environment Port Forwarding Configuration
+# ===============================================
+# Defines services that should be accessible from the Windows host.
+# The tunnel command reads this file to set up SSH port forwarding.
+#
+# Format:
+#   service_name:
+#     ip: <container IP inside Proxmox>
+#     port: <service port>
+#     local_port: <port on Windows host> (optional, defaults to same as port)
+#     description: <human-readable description>
+
+# Proxmox VE Web UI
+# Note: This is already accessible via Docker port mapping (8006)
+# proxmox:
+#   ip: "172.30.0.2"
+#   port: 8006
+#   description: "Proxmox VE Web UI"
+
+# Monitoring Stack
+prometheus:
+  ip: "172.30.0.10"
+  port: 9090
+  description: "Prometheus metrics server"
+
+grafana:
+  ip: "172.30.0.11"
+  port: 3000
+  description: "Grafana dashboards"
+
+# pfSense - once configured
+# pfsense_web:
+#   ip: "172.30.0.1"  # Adjust based on your pfSense LAN IP
+#   port: 443
+#   local_port: 8443
+#   description: "pfSense web UI"
+
+# Add more services as needed:
+# prometheus_node_exporter:
+#   ip: "172.30.0.10"
+#   port: 9100
+#   description: "Node exporter metrics"

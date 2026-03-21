@@ -5,7 +5,7 @@ instance inside Docker for integration testing of the `proxmox-config` CLI tool.
 
 ## How It Works
 
-The test environment uses [qemus/qemu-docker](https://github.com/qemus/qemu-docker)
+The test environment uses [qemux/qemu](https://github.com/qemus/qemu-docker)
 to boot the official Proxmox VE 9.1 ISO inside a QEMU virtual machine running in
 a Docker container.  This gives you a **real** Proxmox API endpoint on
 `https://localhost:8006` that the CLI tool can interact with.
@@ -16,8 +16,8 @@ a Docker container.  This gives you a **real** Proxmox API endpoint on
 |---|---|
 | Docker & Docker Compose | v2.20+ |
 | KVM support | `/dev/kvm` available on the host |
-| Free RAM | 6 GB (4 GB for QEMU + headroom) |
-| Free disk | 40 GB (32 GB virtual disk + ISO cache) |
+| Free RAM | 16 GB (test VM uses ~16 GB) |
+| Free disk | 130 GB (128 GB virtual disk + ISO cache) |
 
 > **Tip:** On Linux, verify KVM is available with `ls -l /dev/kvm`.  On WSL 2,
 > KVM is supported in recent kernels — check with `kvm-ok` or
@@ -25,62 +25,125 @@ a Docker container.  This gives you a **real** Proxmox API endpoint on
 
 ## Quick Start
 
-A wrapper script (`proxmox-test.ps1`) is provided to simplify all test-instance
-operations.  It follows the same pattern as `proxmox-config.ps1`.
+### First Time Setup (Manual Installation)
 
-```bash
-# 1. Start the Proxmox VE container (creates test/.env and downloads the ISO on first run)
+```powershell
+# 1. Start the Proxmox VE container (downloads ISO on first run)
 .\proxmox-test.ps1 start
 
-# 2. Follow the boot progress
-.\proxmox-test.ps1 logs
+# 2. Open the noVNC web viewer and complete installation
+#    http://localhost:8006
+#    - Set root password (remember it!)
+#    - Accept defaults for network, disk, etc.
+#    - Wait for installation to complete and reboot
 
-# 3. Open the Proxmox web UI and complete the installer
-#    https://localhost:8006
+# 3. Wait for container to become healthy
+.\proxmox-test.ps1 status
 
-# 4. After installation, create an API token in the web UI:
-#    Datacenter → Permissions → API Tokens → Add
-#    - User: root@pam
-#    - Token ID: test
-#    - Privilege Separation: unchecked
-#    Copy the secret and paste it into test/.env
+# 4. Run the setup script to create API token
+.\proxmox-test.ps1 setup
+#    Enter the root password you set during installation
 
 # 5. Verify the CLI can connect
 .\proxmox-test.ps1 test
 
-# 6. Run any command against the test instance
-.\proxmox-test.ps1 network list
-.\proxmox-test.ps1 vm list
+# 6. (Optional) Save a snapshot for fast restore later
+.\proxmox-test.ps1 save-snapshot
+```
 
-# 7. Check container status
+### Subsequent Runs (Fast Restore)
+
+If you've saved a snapshot, skip installation entirely:
+
+```powershell
+# Restore from snapshot (instant, no installation needed)
+.\proxmox-test.ps1 restore-snapshot
+
+# Start the instance
+.\proxmox-test.ps1 start
+
+# Wait for healthy, then test
 .\proxmox-test.ps1 status
+.\proxmox-test.ps1 test
 ```
 
-You can also use `docker compose` directly:
+## Commands Reference
 
-```bash
-docker compose -f docker-compose.test.yaml up -d proxmox
-docker compose -f docker-compose.test.yaml run --rm proxmox-config test
+| Command | Description |
+|---------|-------------|
+| `start` | Start the Proxmox VE container |
+| `stop` | Stop container (keeps data) |
+| `destroy` | Stop and remove all data |
+| `status` | Show container health status |
+| `logs` | Follow Proxmox boot/runtime logs |
+| `setup` | Create API token (run after installation) |
+| `save-snapshot` | Export current state to `test/proxmox-snapshot.tar.gz` |
+| `restore-snapshot` | Restore from saved snapshot |
+| `test` | Test API connection |
+| `ports` | List all configured port forwards |
+| `forward` | Set up iptables port forwarding to LXC containers |
+| `<any>` | Pass through to proxmox-config CLI |
+
+## Accessing Services
+
+Services running inside Proxmox LXC containers (Grafana, Prometheus, etc.) are not
+directly accessible from Windows because they're on an internal Docker network.
+
+### Port Forwarding with iptables
+
+The `forward` command sets up iptables rules inside Proxmox to forward ports:
+
+```powershell
+# View configured ports
+.\proxmox-test.ps1 ports
+
+# Set up port forwarding (one-time, persists until Proxmox reboots)
+.\proxmox-test.ps1 forward
 ```
 
-## Tearing Down
+Once configured, access services at:
+- **Grafana**: http://localhost:3000
+- **Prometheus**: http://localhost:9090
 
-```bash
-# Stop containers but keep persistent data (Proxmox installation on disk)
-.\proxmox-test.ps1 stop
+### Configuring Ports
 
-# Stop and remove all data (next start will re-install from ISO)
-.\proxmox-test.ps1 destroy
+Edit `test/ports.yaml` to add services:
+
+```yaml
+my_service:
+  ip: "172.30.0.20"      # IP inside Proxmox
+  port: 8080             # Service port
+  local_port: 8080       # Port on Windows (optional, defaults to port)
+  description: "My app"
+```
+
+### Storing Root Password
+
+To avoid entering the password each time, add to `test/.env`:
+
+```
+PROXMOX_ROOT_PASSWORD=your_password
 ```
 
 ## Configuration
 
 | File | Purpose |
 |---|---|
-| `proxmox-test.ps1` | PowerShell wrapper script (start/stop/logs/status + CLI pass-through) |
-| `docker-compose.test.yaml` | Compose file defining the QEMU container and proxmox-config service |
-| `test/config/proxmox.yaml` | Connection settings pointing to the local container |
-| `test/.env` | API token credentials (not committed — see `.env.example`) |
+| `proxmox-test.ps1` | PowerShell wrapper script |
+| `docker-compose.test.yaml` | Compose file with QEMU container and proxmox-config service |
+| `test/config/proxmox.yaml` | Connection settings (PROXMOX_HOST overrides in env) |
+| `test/.env` | Test-specific overrides (Proxmox host/tokens) |
+| `.env` | Base credentials (Cloudflare, domain settings) |
+| `test/proxmox-snapshot.tar.gz` | Saved state for fast restore (not committed) |
+
+### Environment Variable Layering
+
+The test environment uses layered env files:
+
+1. **`.env`** (base) — Cloudflare credentials, domain settings, etc.
+2. **`test/.env`** (override) — Proxmox host, API tokens for test instance
+
+This mirrors production while allowing test-specific connection settings.
 
 ### Customizing Resources
 
@@ -88,16 +151,30 @@ Edit the `proxmox` service environment variables in `docker-compose.test.yaml`:
 
 ```yaml
 environment:
-  RAM_SIZE: "4G"     # Increase for heavier workloads
-  CPU_CORES: "2"     # Match your available cores
-  DISK_SIZE: "32G"   # Virtual disk size
+  RAM_SIZE: "16G"    # Simulates Dell Optiplex with 32GB
+  CPU_CORES: "4"     # 4 cores - typical i5/i7 from 2015
+  DISK_SIZE: "128G"  # Room for full VM stack
 ```
 
-### Running proxmox-config Locally (Outside Docker)
+## Tearing Down
 
-If you prefer running the CLI on your host:
+```powershell
+# Stop containers but keep persistent data
+.\proxmox-test.ps1 stop
 
-```bash
+# Stop and remove all data (next start will re-install from ISO)
+.\proxmox-test.ps1 destroy
+```
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Container fails to start | Verify KVM: `ls -l /dev/kvm` |
+| Web UI not loading | Wait 3-5 min for boot; check `.\proxmox-test.ps1 logs` |
+| API connection fails | Run `.\proxmox-test.ps1 setup` to create token |
+| Health check failing | Container needs ~2 min after boot to become healthy |
+| Slow performance | Increase `RAM_SIZE`/`CPU_CORES` in docker-compose.test.yaml |
 # Point the CLI at the local container
 export PROXMOX_HOST=localhost
 export PROXMOX_TOKEN_ID=root@pam!test

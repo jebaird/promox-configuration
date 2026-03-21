@@ -269,7 +269,14 @@ def deploy(
         network_manager = NetworkManager(client)
         
         if dry_run:
-            for name in [n["bridge"] for n in vm_config.get("network", [])]:
+            # Handle both list and dict network configs
+            network_config = vm_config.get("network", [])
+            if isinstance(network_config, dict):
+                bridges = [network_config.get("bridge")] if network_config.get("bridge") else []
+            else:
+                bridges = [n["bridge"] for n in network_config if isinstance(n, dict)]
+            
+            for name in bridges:
                 exists = network_manager.bridge_exists(name)
                 status = "[green]exists[/green]" if exists else "[blue]will create[/blue]"
                 console.print(f"  Bridge {name}: {status}")

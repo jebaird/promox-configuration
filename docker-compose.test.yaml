@@ -29,9 +29,11 @@ services:
     container_name: proxmox-test
     environment:
       BOOT: "http://download.proxmox.com/iso/proxmox-ve_9.1-1.iso"
-      RAM_SIZE: "4G"
-      CPU_CORES: "2"
-      DISK_SIZE: "32G"
+      # Simulate typical home lab hardware (Dell Optiplex i7-5xxx, 32GB upgraded)
+      # Adjust RAM_SIZE based on your available memory (leave ~2GB for host)
+      RAM_SIZE: "12G"      # 12GB - safe for 16GB systems
+      CPU_CORES: "4"       # 4 cores - i7-5xxx has 4c/8t
+      DISK_SIZE: "128G"    # 128GB - room for pfSense + monitoring stack
       PORTS: "8007:8006/tcp"
     devices:
       - /dev/kvm
@@ -40,6 +42,8 @@ services:
     ports:
       - "8006:8006"
       - "8007:8007"
+      - "3000:3000"   # Grafana (forwarded via iptables to LXC)
+      - "9090:9090"   # Prometheus (forwarded via iptables to LXC)
     volumes:
       - proxmox-storage:/storage
     stop_grace_period: 2m
@@ -56,13 +60,15 @@ services:
     image: proxmox-config:latest
     network_mode: "service:proxmox"
     env_file:
+      # Layer 1: Base credentials (Cloudflare, domain settings, etc.)
+      - ./.env
+      # Layer 2: Test-specific overrides (Proxmox connection, API tokens)
       - ./test/.env
     volumes:
       # Mount main config directory as base
       - ./config:/app/config:ro
       # Override with test-specific configs
       - ./test/config/proxmox.yaml:/app/config/proxmox.yaml:ro
-      - ./test/.env:/app/.env:ro
       - ./templates:/app/templates:ro
       - ./data:/app/data
     depends_on:
