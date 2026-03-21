@@ -229,6 +229,30 @@ def get_ca_cert_path() -> str | None:
     return os.getenv("PROXMOX_CA_CERT")
 
 
+def get_proxmox_ssh_config() -> dict[str, str] | None:
+    """Get Proxmox host SSH configuration from environment.
+    
+    Used for running commands directly on the Proxmox host (pct exec, etc.)
+    
+    Returns:
+        Dict with 'host', 'user', and 'password' keys, or None if not fully configured
+    """
+    _load_env_files()
+    
+    host = os.getenv("PROXMOX_HOST")
+    user = os.getenv("PROXMOX_SSH_USER")
+    password = os.getenv("PROXMOX_SSH_PASSWORD") or os.getenv("PROXMOX_ROOT_PASSWORD")
+    
+    if not all([host, user, password]):
+        return None
+    
+    return {
+        "host": host,
+        "user": user,
+        "password": password,
+    }
+
+
 def get_default_domain() -> str:
     """Get default domain name from environment.
     

@@ -442,9 +442,201 @@ def deploy_cert_manager(
         raise typer.Exit(1)
 
 
+@app.command("deploy-stack")
+def deploy_stack(
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be done"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompts"),
+    skip_network: bool = typer.Option(False, "--skip-network", help="Skip network bridge setup"),
+    skip_prometheus: bool = typer.Option(False, "--skip-prometheus", help="Skip Prometheus deployment"),
+    skip_grafana: bool = typer.Option(False, "--skip-grafana", help="Skip Grafana deployment"),
+    skip_cert_manager: bool = typer.Option(False, "--skip-cert-manager", help="Skip cert-manager deployment"),
+    skip_cert_targets: bool = typer.Option(False, "--skip-cert-targets", help="Skip cert target setup"),
+):
+    """
+    Deploy the full monitoring and certificate stack.
+    
+    This is the recommended one-command deployment for the home lab:
+    
+    1. Network: Sets up vmbr0, vmbr1, vmbr2 bridges (if needed)
+    2. Prometheus: Metrics collection (VMID 110)
+    3. Grafana: Dashboards (VMID 111)
+    4. Cert-Manager: SSL certificates (VMID 105)
+    5. Cert Targets: SSH key distribution for certificate automation
+    
+    Uses configuration from config/vms/*.yaml and environment variables.
+    Test environment automatically uses test subnet (172.30.0.x).
+    
+    Examples:
+        # Deploy everything
+        proxmox-config deploy-stack --yes
+        
+        # Deploy only monitoring (skip certs)
+        proxmox-config deploy-stack --skip-cert-manager --skip-cert-targets
+        
+        # Dry run to see what would happen
+        proxmox-config deploy-stack --dry-run
+    """
+    import os
+    from .config import load_vm_config, _load_env_files
+    
+    # Ensure env is loaded to get password
+    _load_env_files()
+    root_password = os.getenv("PROXMOX_ROOT_PASSWORD", "")
+    
+    if not yes:
+        console.print("[bold]Deploy Stack Plan[/bold]")
+        console.print("This will deploy the following components:")
+        if not skip_network:
+            console.print("  • Network bridges (vmbr0, vmbr1, vmbr2)")
+        if not skip_prometheus:
+            console.print("  • Prometheus (VMID 110)")
+        if not skip_grafana:
+            console.print("  • Grafana (VMID 111)")
+        if not skip_cert_manager:
+            console.print("  • Cert-Manager (VMID 105)")
+        if not skip_cert_targets:
+            console.print("  • Certificate distribution setup")
+        console.print()
+        
+        if dry_run:
+            console.print("[yellow]DRY RUN - no changes will be made[/yellow]\n")
+        else:
+            response = console.input("Proceed? [y/N]: ")
+            if response.lower() not in ("y", "yes"):
+                console.print("[dim]Aborted[/dim]")
+                raise typer.Exit(0)
+    
+    client = ProxmoxClient()
+    
+    # Step 1: Network bridges
+    if not skip_network:
+        console.print("\n[bold cyan]Step 1: Network Bridges[/bold cyan]")
+        try:
+            from .network import NetworkManager
+            manager = NetworkManager(client)
+            results = manager.setup_bridges_from_config(apply=not dry_run)
+            created = [name for name, was_created in results.items() if was_created]
+            if created:
+                console.print(f"[green]✓[/green] Created bridges: {', '.join(created)}")
+            else:
+                console.print("[green]✓[/green] All bridges already exist")
+        except Exception as e:
+            console.print(f"[red]✗[/red] Network setup failed: {e}")
+            if not yes:
+                raise typer.Exit(1)
+    
+    # Step 2: Prometheus
+    if not skip_prometheus:
+        console.print("\n[bold cyan]Step 2: Prometheus[/bold cyan]")
+        try:
+            from .prometheus_deploy import PrometheusDeployer
+            deployer = PrometheusDeployer(client)
+            success = deployer.deploy(dry_run=dry_run)
+            if success:
+                console.print("[green]✓[/green] Prometheus deployed")
+            else:
+                console.print("[yellow]⚠[/yellow] Prometheus deployment had issues")
+        except Exception as e:
+            console.print(f"[red]✗[/red] Prometheus deployment failed: {e}")
+            if not yes:
+                raise typer.Exit(1)
+    
+    # Step 3: Grafana
+    if not skip_grafana:
+        console.print("\n[bold cyan]Step 3: Grafana[/bold cyan]")
+        try:
+            from .grafana_deploy import GrafanaDeployer
+            deployer = GrafanaDeployer(client)
+            success = deployer.deploy(dry_run=dry_run)
+            if success:
+                console.print("[green]✓[/green] Grafana deployed")
+            else:
+                console.print("[yellow]⚠[/yellow] Grafana deployment had issues")
+        except Exception as e:
+            console.print(f"[red]✗[/red] Grafana deployment failed: {e}")
+            if not yes:
+                raise typer.Exit(1)
+    
+    # Step 4: Cert-Manager
+    if not skip_cert_manager:
+        console.print("\n[bold cyan]Step 4: Cert-Manager[/bold cyan]")
+        try:
+            from .cert_manager_deploy import CertManagerDeployer
+            deployer = CertManagerDeployer(client)
+            success = deployer.deploy(dry_run=dry_run)
+            if success:
+                console.print("[green]✓[/green] Cert-Manager deployed")
+            else:
+                console.print("[yellow]⚠[/yellow] Cert-Manager deployment had issues")
+        except Exception as e:
+            console.print(f"[red]✗[/red] Cert-Manager deployment failed: {e}")
+            if not yes:
+                raise typer.Exit(1)
+    
+    # Step 5: Setup cert targets
+    if not skip_cert_targets and not skip_cert_manager:
+        console.print("\n[bold cyan]Step 5: Certificate Distribution Setup[/bold cyan]")
+        key_file = Path(__file__).parent.parent / "data" / ".cert-manager.key"
+        
+        if not key_file.exists():
+            console.print("[yellow]⚠[/yellow] Skipping cert targets (no management key yet)")
+        elif not root_password:
+            console.print("[yellow]⚠[/yellow] Skipping cert targets (no PROXMOX_ROOT_PASSWORD)")
+        elif dry_run:
+            console.print("[yellow]DRY RUN[/yellow] Would setup cert targets")
+        else:
+            try:
+                from .cert_key_deploy import CertKeyDeployer
+                
+                # Get cert-manager IP
+                cm_config = load_vm_config("cert-manager")
+                network = cm_config.get("network", {})
+                ip_str = network.get("ip", "")
+                cert_manager_ip = ip_str.split("/")[0] if ip_str else ""
+                
+                if cert_manager_ip:
+                    private_key = key_file.read_text()
+                    deployer = CertKeyDeployer(
+                        cert_manager_ip=cert_manager_ip,
+                        cert_manager_key=private_key,
+                    )
+                    result = deployer.deploy_all_targets(
+                        auto_confirm=True,
+                        default_password=root_password,
+                    )
+                    if result.get("success"):
+                        console.print("[green]✓[/green] Cert targets configured")
+                    else:
+                        console.print("[yellow]⚠[/yellow] Some cert targets failed")
+            except Exception as e:
+                console.print(f"[red]✗[/red] Cert target setup failed: {e}")
+    
+    # Summary
+    console.print("\n[bold green]Stack deployment complete![/bold green]")
+    
+    # Show access info
+    from .config import load_vm_config
+    try:
+        prom_ip = load_vm_config("prometheus").get("network", {}).get("ip", "").split("/")[0]
+        graf_ip = load_vm_config("grafana").get("network", {}).get("ip", "").split("/")[0]
+        
+        console.print("\nAccess your services:")
+        if not skip_prometheus and prom_ip:
+            console.print(f"  • Prometheus: http://{prom_ip}:9090")
+        if not skip_grafana and graf_ip:
+            console.print(f"  • Grafana: http://{graf_ip}:3000  (admin/admin)")
+        if not skip_cert_manager:
+            cm_ip = load_vm_config("cert-manager").get("network", {}).get("ip", "").split("/")[0]
+            console.print(f"  • Cert-Manager: ssh root@{cm_ip}")
+    except Exception:
+        pass
+
+
 @app.command("setup-cert-targets")
 def setup_cert_targets(
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be done"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompts"),
+    password: str = typer.Option("", "--password", "-p", help="Root password for targets (or use PROXMOX_ROOT_PASSWORD env)", envvar="PROXMOX_ROOT_PASSWORD"),
 ):
     """
     Deploy SSH keys and receiver scripts to certificate targets.
@@ -457,7 +649,8 @@ def setup_cert_targets(
     - Only execute the cert-receive.sh script (no shell access)
     - No port forwarding, X11, or agent forwarding
     
-    You will be prompted for the root password of each target.
+    You will be prompted for the root password of each target unless
+    --password or PROXMOX_ROOT_PASSWORD is set.
     
     Prerequisites:
     - cert-manager container must be deployed (deploy-cert-manager)
@@ -499,7 +692,11 @@ def setup_cert_targets(
         cert_manager_key=private_key,
     )
     
-    result = deployer.deploy_all_targets(dry_run=dry_run)
+    result = deployer.deploy_all_targets(
+        dry_run=dry_run,
+        auto_confirm=yes,
+        default_password=password or None,
+    )
     
     if not result.get("success", False):
         raise typer.Exit(1)

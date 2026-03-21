@@ -265,11 +265,18 @@ class CertKeyDeployer:
         
         return result
     
-    def deploy_all_targets(self, dry_run: bool = False) -> dict[str, Any]:
-        """Deploy to all enabled targets.
+    def deploy_all_targets(
+        self,
+        dry_run: bool = False,
+        auto_confirm: bool = False,
+        default_password: str | None = None,
+    ) -> dict[str, Any]:
+        """Deploy receiver scripts and SSH keys to all enabled targets.
         
         Args:
             dry_run: If True, only show what would be done
+            auto_confirm: If True, skip confirmation prompts
+            default_password: Password to use for all targets (skips prompts)
             
         Returns:
             Summary of deployment results
@@ -296,20 +303,24 @@ class CertKeyDeployer:
             console.print("\n[yellow]Dry run - no changes made[/yellow]")
             return {"success": True, "message": "Dry run"}
         
-        # Confirm
-        if not Confirm.ask("\nProceed with deployment?"):
-            return {"success": False, "message": "Cancelled by user"}
+        # Confirm unless auto_confirm is set
+        if not auto_confirm:
+            if not Confirm.ask("\nProceed with deployment?"):
+                return {"success": False, "message": "Cancelled by user"}
         
         # Deploy to each target
         results = {}
         for target in targets:
             console.print(f"\n[bold]Deploying to {target.name} ({target.host})...[/bold]")
             
-            # Prompt for password
-            password = Prompt.ask(
-                f"Root password for {target.host}",
-                password=True,
-            )
+            # Use default password if provided, otherwise prompt
+            if default_password:
+                password = default_password
+            else:
+                password = Prompt.ask(
+                    f"Root password for {target.host}",
+                    password=True,
+                )
             
             if not password:
                 console.print("[yellow]Skipped (no password)[/yellow]")
@@ -353,19 +364,23 @@ class CertKeyDeployer:
             for target in targets:
                 console.print(f"Testing {target.name} ({target.host})... ", end="")
                 
-                # Test SSH from cert-manager to target
-                test_cmd = f'ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no {target.user}@{target.host} "test"'
-                result = ssh.execute(test_cmd, timeout=15)
-                
-                if "OK: cert-receive.sh is working" in result.stdout:
-                    console.print("[green]✓ Working[/green]")
-                    results[target.name] = {"success": True, "message": "OK"}
-                elif result.exit_code == 0:
-                    console.print("[yellow]⚠ Connected but unexpected response[/yellow]")
-                    results[target.name] = {"success": False, "message": result.stdout}
-                else:
-                    console.print(f"[red]✗ Failed[/red]")
-                    results[target.name] = {"success": False, "message": result.stderr}
+                try:
+                    # Test SSH from cert-manager to target
+                    test_cmd = f'ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no {target.user}@{target.host} "test"'
+                    result = ssh.execute(test_cmd, timeout=30)
+                    
+                    if "OK: cert-receive.sh is working" in result.stdout:
+                        console.print("[green]✓ Working[/green]")
+                        results[target.name] = {"success": True, "message": "OK"}
+                    elif result.exit_code == 0:
+                        console.print("[yellow]⚠ Connected but unexpected response[/yellow]")
+                        results[target.name] = {"success": False, "message": result.stdout}
+                    else:
+                        console.print(f"[red]✗ Failed[/red]")
+                        results[target.name] = {"success": False, "message": result.stderr}
+                except Exception as e:
+                    console.print(f"[red]✗ Error: {e}[/red]")
+                    results[target.name] = {"success": False, "message": str(e)}
         
         return results
     
