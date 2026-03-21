@@ -12,7 +12,7 @@ targets:
   # pfSense Router (enable after SSH is configured on pfSense)
   pfsense:
     enabled: false
-    host: "10.0.0.1"
+    host: "${PFSENSE_IP:-10.0.0.1}"
     user: "root"
     # Certificate paths on pfSense
     cert_path: "/etc/ssl/cert.pem"
@@ -26,7 +26,7 @@ targets:
   # Proxmox VE Host
   proxmox:
     enabled: true
-    host: "10.0.0.3"
+    host: "${PROXMOX_HOST:-10.0.0.3}"
     user: "root"
     # Proxmox expects fullchain (cert + intermediate CA) at pveproxy-ssl.pem
     fullchain_path: "/etc/pve/local/pveproxy-ssl.pem"

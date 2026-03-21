@@ -44,6 +44,7 @@ services:
       - "8007:8007"
       - "3000:3000"   # Grafana (forwarded via iptables to LXC)
       - "9090:9090"   # Prometheus (forwarded via iptables to LXC)
+      - "2222:2222"   # Cert-manager SSH (forwarded via iptables to LXC)
     volumes:
       - proxmox-storage:/storage
     stop_grace_period: 2m

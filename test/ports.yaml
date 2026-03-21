@@ -28,6 +28,13 @@ grafana:
   port: 3000
   description: "Grafana dashboards"
 
+# Certificate Manager
+cert_manager:
+  ip: "172.30.0.5"
+  port: 22
+  local_port: 2222
+  description: "Cert-manager SSH (for debugging)"
+
 # pfSense - once configured
 # pfsense_web:
 #   ip: "172.30.0.1"  # Adjust based on your pfSense LAN IP

@@ -63,8 +63,8 @@ class PrometheusConfig:
     @classmethod
     def from_yaml(cls, config_path: Path) -> "PrometheusConfig":
         """Load configuration from YAML file."""
-        with open(config_path) as f:
-            data = yaml.safe_load(f)
+        from .config import load_yaml_file
+        data = load_yaml_file(config_path)
         
         config = cls()
         

@@ -474,17 +474,18 @@ def setup_cert_targets(
         console.print("Run [bold]deploy-cert-manager[/bold] first to create the cert-manager container.")
         raise typer.Exit(1)
     
-    # Load cert-manager config to get IP
-    config_path = Path(__file__).parent.parent / "config" / "vms" / "cert-manager.yaml"
-    cert_manager_ip = "10.0.0.5"  # Default
-    
-    if config_path.exists():
-        import yaml
-        with open(config_path) as f:
-            cm_config = yaml.safe_load(f)
+    # Load cert-manager config with env var expansion
+    from .config import load_vm_config
+    try:
+        cm_config = load_vm_config("cert-manager")
         network = cm_config.get("network", {})
-        ip_str = network.get("ip", "10.0.0.5/24")
-        cert_manager_ip = ip_str.split("/")[0]
+        ip_str = network.get("ip", "")
+        cert_manager_ip = ip_str.split("/")[0] if ip_str else ""
+        if not cert_manager_ip:
+            raise ValueError("No cert-manager IP configured")
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to load cert-manager config: {e}")
+        raise typer.Exit(1)
     
     # Read management key
     private_key = key_file.read_text()
@@ -525,17 +526,18 @@ def verify_cert_targets():
         console.print("Run [bold]deploy-cert-manager[/bold] first.")
         raise typer.Exit(1)
     
-    # Load cert-manager config to get IP
-    config_path = Path(__file__).parent.parent / "config" / "vms" / "cert-manager.yaml"
-    cert_manager_ip = "10.0.0.5"  # Default
-    
-    if config_path.exists():
-        import yaml
-        with open(config_path) as f:
-            cm_config = yaml.safe_load(f)
+    # Load cert-manager config with env var expansion
+    from .config import load_vm_config
+    try:
+        cm_config = load_vm_config("cert-manager")
         network = cm_config.get("network", {})
-        ip_str = network.get("ip", "10.0.0.5/24")
-        cert_manager_ip = ip_str.split("/")[0]
+        ip_str = network.get("ip", "")
+        cert_manager_ip = ip_str.split("/")[0] if ip_str else ""
+        if not cert_manager_ip:
+            raise ValueError("No cert-manager IP configured")
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to load cert-manager config: {e}")
+        raise typer.Exit(1)
     
     # Read management key
     private_key = key_file.read_text()

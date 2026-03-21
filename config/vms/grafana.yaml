@@ -27,8 +27,8 @@ container:
 network:
   interface: "eth0"
   bridge: "vmbr0"
-  ip: "10.0.0.11/24"
-  gateway: "10.0.0.2"
+  ip: "${GRAFANA_IP:-10.0.0.11}/24"
+  gateway: "${LAN_GATEWAY:-10.0.0.2}"
 
 # Grafana settings
 grafana:
@@ -44,7 +44,7 @@ grafana:
 # Data sources to provision
 datasources:
   prometheus:
-    url: "http://10.0.0.10:9090"
+    url: "http://${PROMETHEUS_IP:-10.0.0.10}:9090"
     default: true
 
 # Dashboards to provision

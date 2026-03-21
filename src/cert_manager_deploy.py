@@ -73,8 +73,8 @@ class CertManagerConfig:
         Returns:
             CertManagerConfig instance
         """
-        with open(config_path) as f:
-            data = yaml.safe_load(f)
+        from .config import load_yaml_file
+        data = load_yaml_file(config_path)
         
         config = cls()
         
@@ -578,10 +578,10 @@ class CertManagerDeployer:
 
 def load_cert_targets() -> dict[str, Any]:
     """Load certificate distribution targets from config."""
+    from .config import load_yaml_file
     config_path = Path(__file__).parent.parent / "config" / "cert-targets.yaml"
     
     if not config_path.exists():
         return {"targets": {}}
     
-    with open(config_path) as f:
-        return yaml.safe_load(f) or {"targets": {}}
+    return load_yaml_file(config_path) or {"targets": {}}

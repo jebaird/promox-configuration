@@ -97,14 +97,14 @@ class CertKeyDeployer:
         Returns:
             List of enabled TargetConfig objects
         """
+        from .config import load_yaml_file
         config_path = Path(__file__).parent.parent / "config" / "cert-targets.yaml"
         
         if not config_path.exists():
             console.print("[yellow]Warning: cert-targets.yaml not found[/yellow]")
             return []
         
-        with open(config_path) as f:
-            data = yaml.safe_load(f) or {}
+        data = load_yaml_file(config_path) or {}
         
         targets = []
         for name, target_data in data.get("targets", {}).items():

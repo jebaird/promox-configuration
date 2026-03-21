@@ -1,6 +1,7 @@
 """Configuration loading utilities."""
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -8,16 +9,101 @@ import yaml
 from dotenv import load_dotenv
 
 
+# Load .env files on module import (base first, then test override if in test mode)
+_env_loaded = False
+
+
+def _load_env_files() -> None:
+    """Load environment files with proper layering.
+    
+    Loads in order:
+    1. .env (base/production values)
+    2. test/.env (test overrides, if PROXMOX_HOST matches test pattern)
+    """
+    global _env_loaded
+    if _env_loaded:
+        return
+    
+    root = Path(__file__).parent.parent
+    
+    # Load base .env first
+    base_env = root / ".env"
+    if base_env.exists():
+        load_dotenv(base_env)
+    
+    # Auto-detect test mode and load test/.env overrides
+    # Test mode if PROXMOX_HOST is already set to 172.30.x.x (Docker network)
+    test_env = root / "test" / ".env"
+    if test_env.exists():
+        # Check if we should load test overrides
+        # This happens when running via docker-compose.test.yaml which sets PROXMOX_HOST
+        host = os.getenv("PROXMOX_HOST", "")
+        if host.startswith("172.30.") or host == "localhost":
+            load_dotenv(test_env, override=True)
+    
+    _env_loaded = True
+
+
+def expand_env_vars(text: str) -> str:
+    """Expand environment variables in text.
+    
+    Supports:
+    - ${VAR} - Replace with env var value (empty string if not set)
+    - ${VAR:-default} - Replace with env var or default if not set
+    - ${VAR:?error} - Replace with env var or raise error if not set
+    
+    Args:
+        text: Text containing ${VAR} patterns
+        
+    Returns:
+        Text with environment variables expanded
+        
+    Raises:
+        ValueError: If ${VAR:?error} pattern is used and VAR is not set
+    """
+    # Ensure env files are loaded
+    _load_env_files()
+    
+    def replace_var(match: re.Match) -> str:
+        full_match = match.group(0)
+        var_name = match.group(1)
+        modifier = match.group(2)  # Either None, ":-default", or ":?error"
+        
+        value = os.getenv(var_name)
+        
+        if value is not None:
+            return value
+        elif modifier is None:
+            # ${VAR} with no default
+            return ""
+        elif modifier.startswith(":-"):
+            # ${VAR:-default}
+            return modifier[2:]
+        elif modifier.startswith(":?"):
+            # ${VAR:?error}
+            raise ValueError(f"Required environment variable {var_name} is not set: {modifier[2:]}")
+        else:
+            return ""
+    
+    # Pattern matches ${VAR}, ${VAR:-default}, or ${VAR:?error}
+    # Group 1: variable name
+    # Group 2: optional modifier (:-default or :?error)
+    pattern = r'\$\{([A-Za-z_][A-Za-z0-9_]*)(:-[^}]*|:\?[^}]*)?\}'
+    
+    return re.sub(pattern, replace_var, text)
+
+
 def get_config_dir() -> Path:
     """Get the configuration directory path."""
     return Path(__file__).parent.parent / "config"
 
 
-def load_yaml(filename: str) -> dict[str, Any]:
+def load_yaml(filename: str, expand_vars: bool = True) -> dict[str, Any]:
     """Load a YAML configuration file.
     
     Args:
         filename: Name of the YAML file (with or without .yaml extension)
+        expand_vars: If True, expand ${VAR} patterns in the file
         
     Returns:
         Parsed YAML content as dictionary
@@ -26,6 +112,9 @@ def load_yaml(filename: str) -> dict[str, Any]:
         FileNotFoundError: If config file doesn't exist
         yaml.YAMLError: If YAML parsing fails
     """
+    # Ensure env files are loaded
+    _load_env_files()
+    
     config_dir = get_config_dir()
     
     # Add .yaml extension if not present
@@ -38,7 +127,37 @@ def load_yaml(filename: str) -> dict[str, Any]:
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
     
     with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        content = f.read()
+    
+    # Expand environment variables before parsing
+    if expand_vars:
+        content = expand_env_vars(content)
+    
+    return yaml.safe_load(content)
+
+
+def load_yaml_file(file_path: Path, expand_vars: bool = True) -> dict[str, Any]:
+    """Load a YAML file from any path with env var expansion.
+    
+    This is useful for loading config files that aren't in the config directory.
+    
+    Args:
+        file_path: Full path to the YAML file
+        expand_vars: If True, expand ${VAR} patterns in the file
+        
+    Returns:
+        Parsed YAML content as dictionary
+    """
+    # Ensure env files are loaded
+    _load_env_files()
+    
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    
+    if expand_vars:
+        content = expand_env_vars(content)
+    
+    return yaml.safe_load(content)
 
 
 def load_vm_config(vm_name: str) -> dict[str, Any]:
@@ -61,10 +180,7 @@ def load_proxmox_config() -> dict[str, Any]:
     - PROXMOX_PORT: API port (default: 8006)
     - PROXMOX_NODE: Node name (default: pve)
     """
-    # Load .env file if it exists
-    env_path = Path(__file__).parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
+    _load_env_files()
     
     config = load_yaml("proxmox")
     
@@ -93,10 +209,7 @@ def load_credentials() -> tuple[str, str]:
     Raises:
         ValueError: If credentials are not configured
     """
-    # Load .env file if it exists
-    env_path = Path(__file__).parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
+    _load_env_files()
     
     token_id = os.getenv("PROXMOX_TOKEN_ID")
     token_secret = os.getenv("PROXMOX_TOKEN_SECRET")
@@ -122,11 +235,7 @@ def get_default_domain() -> str:
     Returns:
         Domain from PFSENSE_DOMAIN env var, or 'local' if not set
     """
-    # Load .env file if it exists
-    env_path = Path(__file__).parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
-    
+    _load_env_files()
     return os.getenv("PFSENSE_DOMAIN", "local")
 
 
@@ -137,10 +246,7 @@ def get_lan_subnet() -> str:
         LAN subnet from PFSENSE_LAN_SUBNET env var, or '10.0.0' if not set.
         Format: '10.0.0' (without trailing dot)
     """
-    env_path = Path(__file__).parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
-    
+    _load_env_files()
     return os.getenv("PFSENSE_LAN_SUBNET", "10.0.0")
 
 
@@ -153,9 +259,7 @@ def get_cloudflare_credentials() -> tuple[str, str]:
     Raises:
         ValueError: If credentials are not configured
     """
-    env_path = Path(__file__).parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
+    _load_env_files()
     
     api_token = os.getenv("CLOUDFLARE_API_TOKEN")
     zone = os.getenv("CLOUDFLARE_ZONE")

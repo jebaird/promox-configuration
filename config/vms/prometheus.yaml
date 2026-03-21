@@ -29,8 +29,8 @@ container:
 network:
   interface: "eth0"
   bridge: "vmbr0"
-  ip: "10.0.0.10/24"
-  gateway: "10.0.0.2"
+  ip: "${PROMETHEUS_IP:-10.0.0.10}/24"
+  gateway: "${LAN_GATEWAY:-10.0.0.2}"
 
 # Prometheus settings
 prometheus:
@@ -56,5 +56,5 @@ pve_exporter:
 targets:
   proxmox:
     - name: "pve"
-      host: "10.0.0.3"
+      host: "${PROXMOX_HOST:-10.0.0.3}"
       # node: "pve"  # Optional: specific node name
